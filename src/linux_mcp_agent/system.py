@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import platform
 import time
@@ -81,24 +82,40 @@ def list_processes(
         raise ValueError("limit must be between 1 and 100")
     if sort_by not in {"cpu", "memory"}:
         raise ValueError("sort_by must be 'cpu' or 'memory'")
-    if name_contains is not None and not 1 <= len(name_contains) <= 64:
-        raise ValueError("name_contains must contain between 1 and 64 characters")
+    if (
+        not math.isfinite(sample_window_seconds)
+        or not 0 <= sample_window_seconds <= 1.0
+    ):
+        raise ValueError("sample_window_seconds must be between 0 and 1 second")
+
+    name_filter = name_contains.strip() if name_contains is not None else None
+    if name_filter is not None and not 1 <= len(name_filter) <= 64:
+        raise ValueError("name_contains must contain between 1 and 64 non-whitespace characters")
 
     memory_total = psutil.virtual_memory().total
     first_host = psutil.cpu_times()
     first_host_total = sum(first_host)
     snapshots: dict[int, dict[str, Any]] = {}
     inaccessible = 0
-    for proc in psutil.process_iter(attrs=["pid", "name", "memory_info"]):
+    for proc in psutil.process_iter(attrs=["pid", "name", "memory_info", "create_time"]):
         try:
             info = proc.info
             cpu_times = proc.cpu_times()
             name = info.get("name") or "<unknown>"
-            if name_contains and name_contains.casefold() not in name.casefold():
+            if name_filter and name_filter.casefold() not in name.casefold():
                 continue
+
+            create_time = info.get("create_time")
+            if (
+                not isinstance(create_time, (int, float))
+                or isinstance(create_time, bool)
+            ):
+                raise TypeError("Process creation time is unavailable")
+
             mem_info = info.get("memory_info")
             snapshots[int(info["pid"])] = {
                 "name": name,
+                "createTime": float(create_time),
                 "cpuSeconds": float(cpu_times.user + cpu_times.system),
                 "rssBytes": int(mem_info.rss) if mem_info else None,
             }
@@ -112,6 +129,17 @@ def list_processes(
     for pid, first in snapshots.items():
         try:
             current = psutil.Process(pid)
+            # A PID may be reused between the two samples. Never combine CPU/RSS
+            # data from the new process with the name and first sample of the old one.
+            if not math.isclose(
+                current.create_time(),
+                first["createTime"],
+                rel_tol=0.0,
+                abs_tol=0.000001,
+            ):
+                inaccessible += 1
+                continue
+
             cpu_times = current.cpu_times()
             delta = max(0.0, float(cpu_times.user + cpu_times.system) - first["cpuSeconds"])
             cpu_percent = min(100.0, max(0.0, delta / host_delta * 100.0))
