@@ -69,13 +69,14 @@ def test_read_allowed_log_rejects_out_of_range_lines() -> None:
 
 
 def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
-        def fake_which(_path: str) -> str:
+    def fake_which(_path: str) -> str:
         return "/usr/bin/journalctl"
 
-    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
-    def timeout(*args: Any, **kwargs: Any) -> None:
+    def timeout(*args: Any, **kwargs: Any) -> tuple[str, bool, int]:
         raise TimeoutError("Journal query exceeded its configured time limit")
-    monkeypatch.setattr("linux_mcp_agent.log_reader._run_journalctl_bounded", timeout)
+
+    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
+    monkeypatch.setattr("linux_mcp_agent.log_reader.run_journalctl_bounded", timeout)
     with pytest.raises(TimeoutError):
         read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
 

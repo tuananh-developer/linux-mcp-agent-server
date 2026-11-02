@@ -185,7 +185,7 @@ def read_allowed_log(
     if executable is None:
         raise LogReadError("journalctl executable is unavailable")
 
-    output, output_truncated, return_code = _run_journalctl_bounded(
+    output, output_truncated, return_code = run_journalctl_bounded(
         [
             executable,
             "--no-pager",

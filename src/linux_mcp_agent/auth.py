@@ -6,9 +6,9 @@ import asyncio
 import base64
 import json
 import logging
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from typing import Any, cast
 from urllib.request import ProxyHandler, Request, build_opener
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
