@@ -6,7 +6,7 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 
 ## In scope
 
-- Official MCP Python SDK v2, Streamable HTTP endpoint at \`/mcp\`.
+- Official MCP Python SDK v2, Streamable HTTP endpoint at `/mcp`.
 - Linux CPU/RAM, allowlisted filesystem usage, bounded process list, allowlisted real systemd journal access.
 - Four MCP Tools, one MCP Resource and one MCP Prompt.
 - OAuth2/OIDC resource-server validation using Keycloak, exact issuer and resource/audience binding, and least-privilege scopes.
@@ -25,15 +25,15 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 
 | ID | Requirement | Verification |
 |---|---|---|
-| FR-001 | The server shall expose MCP over Streamable HTTP at \`/mcp\`. | MCP client initialize and discovery test |
-| FR-002 | The server shall expose CPU, memory, load average and uptime through \`get_system_metrics\`. | Unit test and live host check |
+| FR-001 | The server shall expose MCP over Streamable HTTP at `/mcp`. | MCP client initialize and discovery test |
+| FR-002 | The server shall expose CPU, memory, load average and uptime through `get_system_metrics`. | Unit test and live host check |
 | FR-003 | The server shall return disk usage only for administrator-allowlisted absolute paths. | Allowlist positive/negative tests |
 | FR-004 | The server shall return a bounded process snapshot with PID, name, CPU%, RAM% and RSS bytes, without command lines or environment values. | Process reader unit tests |
 | FR-005 | The server shall read only configured journald aliases, with bounded lines, output bytes, execution time and best-effort secret redaction. | Log reader security tests |
-| FR-006 | The server shall expose a JSON system summary at \`linux://system/summary\`. | MCP resource discovery/read test |
-| FR-007 | The server shall expose a \`health_check\` prompt with a constrained focus argument. | MCP prompt discovery/get test |
+| FR-006 | The server shall expose a JSON system summary at `linux://system/summary`. | MCP resource discovery/read test |
+| FR-007 | The server shall expose a `health_check` prompt with a constrained focus argument. | MCP prompt discovery/get test |
 | FR-008 | The server shall require the configured base OAuth scope for MCP access and an additional log scope for journal reads. | Authorization unit and integration tests |
-| FR-009 | The server shall expose a separate operational health endpoint at \`/healthz\`. | HTTP health check |
+| FR-009 | The server shall expose a separate operational health endpoint at `/healthz`. | HTTP health check |
 
 ## Non-functional requirements
 
@@ -42,7 +42,7 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 | NFR-SEC-001 | The application shall remain read-only and shall not expose arbitrary shell execution or destructive host operations. | API review and security tests |
 | NFR-SEC-002 | The MCP process shall bind to loopback; LAN access shall pass through the TLS reverse proxy. | Configuration and socket inspection |
 | NFR-SEC-003 | Invalid, expired, wrong-issuer, wrong-audience or insufficient-scope tokens shall fail closed. | OAuth negative integration tests |
-| NFR-SEC-004 | Log access shall use fixed server-owned executable arguments with \`shell=False\`. | Code review and command-boundary tests |
+| NFR-SEC-004 | Log access shall use fixed server-owned executable arguments with `shell=False`. | Code review and command-boundary tests |
 | NFR-PRF-001 | Each MCP tool shall achieve p95 response time at or below 2 seconds on the designated acceptance host, excluding external LLM inference. | Repeated benchmark with recorded host details |
 | NFR-PRF-002 | Process sampling shall use a bounded sample window and journal reads shall enforce configured time/output limits. | Unit tests and runtime measurements |
 | NFR-REL-001 | The project shall pass Ruff, strict Pyright and pytest in CI on supported Python versions. | GitHub Actions |

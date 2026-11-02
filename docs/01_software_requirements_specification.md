@@ -65,16 +65,16 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 
 | ID | Requirement |
 |---|---|
-| FR-001 | The server shall expose MCP over Streamable HTTP at \`/mcp\`. |
-| FR-002 | The server shall provide \`get_system_metrics\`, returning timestamped CPU, logical core count, memory, load average, uptime and status. |
-| FR-003 | The server shall provide \`get_disk_usage\`, returning capacity metrics only for exact administrator-allowlisted mount points. |
-| FR-004 | The server shall provide \`list_processes\`, with a limit from 1 to 100, CPU or memory sorting, and an optional bounded name filter. Returned process fields shall be limited to PID, name, CPU%, memory%, RSS bytes and status. |
+| FR-001 | The server shall expose MCP over Streamable HTTP at `/mcp`. |
+| FR-002 | The server shall provide `get_system_metrics`, returning timestamped CPU, logical core count, memory, load average, uptime and status. |
+| FR-003 | The server shall provide `get_disk_usage`, returning capacity metrics only for exact administrator-allowlisted mount points. |
+| FR-004 | The server shall provide `list_processes`, with a limit from 1 to 100, CPU or memory sorting, and an optional bounded name filter. Returned process fields shall be limited to PID, name, CPU%, memory%, RSS bytes and status. |
 | FR-005 | The process reader shall detect process exit or PID reuse between samples and shall not combine measurements from different process identities. |
-| FR-006 | The server shall provide \`read_allowed_log\`, accepting an alias and a bounded line count only. The alias shall resolve to a configured systemd unit. |
-| FR-007 | Journal reads shall use a fixed server-controlled \`journalctl\` executable and argument list, disable shell interpretation, enforce time/output limits and redact common secret patterns. |
-| FR-008 | The server shall expose a JSON system summary at \`linux://system/summary\`. |
-| FR-009 | The server shall expose a \`health_check\` prompt with a constrained focus argument. |
-| FR-010 | The server shall expose \`/healthz\` as a separate operational health endpoint. |
+| FR-006 | The server shall provide `read_allowed_log`, accepting an alias and a bounded line count only. The alias shall resolve to a configured systemd unit. |
+| FR-007 | Journal reads shall use a fixed server-controlled `journalctl` executable and argument list, disable shell interpretation, enforce time/output limits and redact common secret patterns. |
+| FR-008 | The server shall expose a JSON system summary at `linux://system/summary`. |
+| FR-009 | The server shall expose a `health_check` prompt with a constrained focus argument. |
+| FR-010 | The server shall expose `/healthz` as a separate operational health endpoint. |
 | FR-011 | The server shall require the configured base scope for MCP access and the additional log scope before reading journald. |
 | FR-012 | The server shall return structured, bounded results and safe errors without exposing tokens, client secrets, process command lines or process environment values. |
 
@@ -82,7 +82,7 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 
 ### 4.1 MCP interface
 
-The server shall expose four tools: \`get_system_metrics\`, \`get_disk_usage\`, \`list_processes\` and \`read_allowed_log\`; one resource: \`linux://system/summary\`; and one prompt: \`health_check\`.
+The server shall expose four tools: `get_system_metrics`, `get_disk_usage`, `list_processes` and `read_allowed_log`; one resource: `linux://system/summary`; and one prompt: `health_check`.
 
 ### 4.2 Authentication interface
 
@@ -132,9 +132,9 @@ The project shall not be marked accepted until all acceptance evidence is record
 
 The implementation mapping is:
 
-- FR-001, FR-008, FR-009, FR-010: \`src/linux_mcp_agent/server.py\`.
-- FR-002, FR-003, FR-004, FR-005: \`src/linux_mcp_agent/system.py\`.
-- FR-006, FR-007: \`src/linux_mcp_agent/log_reader.py\`.
-- FR-011: \`src/linux_mcp_agent/auth.py\`, \`src/linux_mcp_agent/auth_claims.py\` and the log-scope check in \`server.py\`.
-- Runtime constraints: \`src/linux_mcp_agent/config.py\`.
-- Automated tests: \`tests/\`; deployment evidence is collected on the Ubuntu acceptance host.
+- FR-001, FR-008, FR-009, FR-010: `src/linux_mcp_agent/server.py`.
+- FR-002, FR-003, FR-004, FR-005: `src/linux_mcp_agent/system.py`.
+- FR-006, FR-007: `src/linux_mcp_agent/log_reader.py`.
+- FR-011: `src/linux_mcp_agent/auth.py`, `src/linux_mcp_agent/auth_claims.py` and the log-scope check in `server.py`.
+- Runtime constraints: `src/linux_mcp_agent/config.py`.
+- Automated tests: `tests/`; deployment evidence is collected on the Ubuntu acceptance host.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -73,12 +73,13 @@ def test_list_processes_rejects_blank_or_oversized_name_filter(name_filter: str)
 
 def test_list_processes_rejects_reused_pid(monkeypatch: pytest.MonkeyPatch) -> None:
     class InitialProcess:
-        info = {
-            "pid": 4242,
-            "name": "worker",
-            "memory_info": SimpleNamespace(rss=1024),
-            "create_time": 100.0,
-        }
+        def __init__(self) -> None:
+            self.info = {
+                "pid": 4242,
+                "name": "worker",
+                "memory_info": SimpleNamespace(rss=1024),
+                "create_time": 100.0,
+            }
 
         @staticmethod
         def cpu_times() -> SimpleNamespace:
