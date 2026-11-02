@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from linux_mcp_agent.system import NotAllowedError, get_disk_usage, get_system_metrics, list_processes
+from linux_mcp_agent.system import (
+    NotAllowedError,
+    get_disk_usage,
+    get_system_metrics,
+    list_processes,
+)
 
 
 def test_system_metrics_has_expected_non_negative_values() -> None:

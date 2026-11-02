@@ -20,7 +20,12 @@ from starlette.routing import Mount, Route
 from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
 from linux_mcp_agent.config import Settings
 from linux_mcp_agent.log_reader import load_log_sources, read_allowed_log
-from linux_mcp_agent.system import get_disk_usage, get_system_metrics, list_processes, system_summary
+from linux_mcp_agent.system import (
+    get_disk_usage,
+    get_system_metrics,
+    list_processes,
+    system_summary,
+)
 
 logger = logging.getLogger(__name__)
 

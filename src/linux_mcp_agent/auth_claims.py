@@ -29,11 +29,11 @@ def validate_introspection_payload(
         return None
 
     not_before = payload.get("nbf")
-    if not_before is None:
-        pass
-    elif isinstance(not_before, bool) or not isinstance(not_before, (int, float)):
-        return None
-    elif not_before > current:
+    if not_before is not None and (
+        isinstance(not_before, bool)
+        or not isinstance(not_before, (int, float))
+        or not_before > current
+    ):
         return None
 
     raw_audience = payload.get("aud")
