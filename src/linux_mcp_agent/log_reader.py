@@ -121,6 +121,8 @@ def load_log_sources(path: Path) -> dict[str, str]:
 
     sources: dict[str, str] = {}
     for alias, config_object in raw.items():
+        if not isinstance(alias, str):
+            raise LogReadError("Log source configuration contains an invalid alias")
         if not _ALIAS_RE.fullmatch(alias):
             raise LogReadError("Log source configuration contains an invalid alias")
         if not isinstance(config_object, dict):
