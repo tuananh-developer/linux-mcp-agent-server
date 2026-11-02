@@ -91,11 +91,21 @@ def test_list_processes_rejects_reused_pid(monkeypatch: pytest.MonkeyPatch) -> N
             return 101.0
 
     host_samples = iter([(100.0, 200.0, 700.0), (101.0, 200.0, 700.0)])
+
+    def fake_process_iter(**_kwargs: object) -> list[InitialProcess]:
+        return [InitialProcess()]
+
+    def fake_process(_pid: int) -> ReusedProcess:
+        return ReusedProcess()
+
+    def no_sleep(_seconds: float) -> None:
+        return None
+
     monkeypatch.setattr("linux_mcp_agent.system.psutil.virtual_memory", lambda: SimpleNamespace(total=4096))
     monkeypatch.setattr("linux_mcp_agent.system.psutil.cpu_times", lambda: next(host_samples))
-    monkeypatch.setattr("linux_mcp_agent.system.psutil.process_iter", lambda **_kwargs: [InitialProcess()])
-    monkeypatch.setattr("linux_mcp_agent.system.psutil.Process", lambda _pid: ReusedProcess())
-    monkeypatch.setattr("linux_mcp_agent.system.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("linux_mcp_agent.system.psutil.process_iter", fake_process_iter)
+    monkeypatch.setattr("linux_mcp_agent.system.psutil.Process", fake_process)
+    monkeypatch.setattr("linux_mcp_agent.system.time.sleep", no_sleep)
 
     result = list_processes(sample_window_seconds=0)
 
