@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, team-handoff]
   pull_request:
-    branches: [main]
+    branches: [main, team-handoff]
   workflow_dispatch:
 
 permissions:
@@ -59,13 +59,3 @@ jobs:
           path: uv.lock
           if-no-files-found: error
           retention-days: 1
-
-  compose-config:
-    name: Validate infrastructure Compose file
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-      - name: Validate Compose model
-        working-directory: deploy/compose
-        run: docker compose --env-file .env.example -f compose.yaml config --quiet

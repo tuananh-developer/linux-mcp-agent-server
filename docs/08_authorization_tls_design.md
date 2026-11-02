@@ -1,5 +1,7 @@
 # Authorization and TLS design
 
+> **Design reference only on `team-handoff`:** OAuth and TLS implementation have deliberately been returned to member 2. The server on this branch has no OAuth verifier or LAN ingress. Do not treat the design below as an implemented security control.
+
 ## Roles
 
 - Keycloak is the OAuth 2.1 authorization server.

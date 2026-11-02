@@ -1,66 +1,66 @@
 # Linux MCP Agent Server
 
-A read-only Linux observability MCP server for external Agentic AI clients. Built with Python 3.15.2 (the latest stable Python release on 2026-11-02) and the official MCP Python SDK 2.3.0. CI checks both Python 3.14.10 and 3.15.2 because some upstream package classifiers have not yet caught up with the newest interpreter. The primary acceptance environment is **Ubuntu 24.04 LTS**.
+A read-only Linux observability MCP server built with Python and the official MCP Python SDK 2.x. The primary acceptance target is **Ubuntu 24.04 LTS x86_64**.
 
-## Scope
+> **Team-handoff branch status:** this branch is a collaboration baseline, not a deployable release. The MCP core and its architecture documents are retained. Security/Infrastructure and QA/acceptance implementation work has deliberately been returned to the assigned team members. Keep this branch loopback-only; do not expose it to a LAN.
 
-The server exposes:
+## MCP interface contract
 
-| Primitive | Name | Purpose |
+| Primitive | Name | Handoff status |
 |---|---|---|
-| Tool | `get_system_metrics` | CPU, memory, load average and uptime |
-| Tool | `get_disk_usage` | Allowlisted filesystem capacity |
-| Tool | `list_processes` | Bounded PID/name/CPU/RAM snapshot |
-| Tool | `read_allowed_log` | Allowlisted journald unit aliases only |
-| Resource | `linux://system/summary` | High-level JSON system summary |
-| Prompt | `health_check` | Safe, read-only health-check instructions |
+| Tool | `get_system_metrics` | Implemented in the MCP core |
+| Tool | `get_disk_usage` | Implemented in the MCP core |
+| Tool | `list_processes` | Implemented in the MCP core |
+| Tool | `read_allowed_log` | Contract registered; implementation intentionally pending |
+| Resource | `linux://system/summary` | Implemented in the MCP core |
+| Prompt | `health_check` | Implemented in the MCP core |
 
-This repository does **not** host an LLM or implement the Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection and provider fallback. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
+The external Agent/MCP Client owns model selection, inference, tool choice, conversation history and provider fallback. This repository does not host an LLM.
 
-## Architecture
+## Current implementation boundary
 
-- Python MCP service runs natively on the Linux host under systemd and binds to `127.0.0.1:3000`.
-- Caddy 2.11.7 terminates TLS and exposes only the MCP endpoint and required protected-resource metadata route to the LAN.
-- Keycloak 26.8.1 issues OAuth access tokens; the MCP service validates them using RFC 7662 introspection and exact issuer/resource/audience/scope checks.
-- PostgreSQL 18.6 stores Keycloak data only. It is not an application database.
-- Docker Compose 5.6.1 runs Caddy, Keycloak and PostgreSQL; the MCP service is not containerized.
+- `system.py` contains the read-only CPU, memory, disk and process collectors.
+- `server.py` registers the MCP tools, resource, prompt and operational health route.
+- `config.py` contains only the minimal loopback runtime settings required by the core.
+- `read_allowed_log` deliberately returns a clear `NOT_IMPLEMENTED` tool error. The journald reader, log-source allowlist and its authorization policy belong to the Security & Infrastructure workstream.
+- Keycloak/OAuth implementation, Caddy configuration, Docker Compose infrastructure and the native systemd unit are intentionally absent from this branch. Their target requirements remain documented; they are not proof of a working deployment.
 
-## Version baseline (checked 2026-11-02)
+## Architecture and requirements
 
-| Component | Version |
-|---|---:|
-| Python | 3.15.2 (default); CI also checks 3.14.10 |
-| Hatchling build backend | 1.33.0 |
-| Official MCP Python SDK (`mcp`) | 2.3.0 |
-| psutil | 7.2.2 |
-| Pydantic | 2.14.2 |
-| Starlette | 1.10.0 |
-| Uvicorn | 0.54.0 |
-| uv | 0.13.6 |
-| pytest / pytest-asyncio | 9.2.0 / 1.4.1 |
-| Ruff / Pyright | 0.17.3 / 1.1.414 |
-| Caddy | 2.11.7 |
-| Keycloak | 26.8.1 |
-| PostgreSQL | 18.6 |
-| Docker Compose CLI | 5.6.1 |
+Start with:
 
-Exact direct Python dependencies are pinned in `pyproject.toml`. Generate `uv.lock` with `uv lock` on a network-connected development machine, review and commit it before production deployment; CI currently resolves transitive dependencies from the exact direct pins.
+- `docs/00_READ_FIRST.md`
+- `docs/01_software_requirements_specification.md`
+- `docs/02_project_charter_and_scope.md`
+- `docs/03_architecture_and_design.md`
+- `docs/04_ooad_analysis_and_uml.md`
+- `docs/05_mcp_interface_contracts.md`
+- `docs/10_team_workstream_handoff.md`
+
+Security and deployment design references:
+
+- `docs/07_security_threat_model.md`
+- `docs/08_authorization_tls_design.md`
+- `docs/09_ubuntu2404_deployment.md`
+- `deploy/keycloak/README.md`
+- `deploy/caddy/README.md`
+- `deploy/compose/README.md`
+- `deploy/systemd/README.md`
+
+These documents describe requirements and intended acceptance behavior. A member must implement and validate the corresponding infrastructure before it can be considered complete.
 
 ## Local development
 
-Install uv 0.13.6 and Python 3.15.2:
+The current app configuration is intentionally loopback-only:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://astral.sh/uv/0.13.6/install.sh | sh
-uv python install 3.15.2
-uv lock
 uv sync --all-groups
 cp .env.example .env
 set -a; source .env; set +a
 uv run python -m linux_mcp_agent
 ```
 
-The local `.env.example` uses `AUTH_MODE=disabled` and loopback only. Never expose this development mode to the LAN.
+The server binds to `127.0.0.1:3000` by default. The local mode has no OAuth protection and is for development on the same host only. Never change the bind address to `0.0.0.0` to bypass the missing infrastructure work.
 
 ## Quality checks
 
@@ -70,19 +70,8 @@ uv run pyright
 uv run pytest
 ```
 
-## LAN deployment
+CI runs the quality and test suite on Python 3.14.10 and 3.15.2. The existing in-process MCP Client test verifies SDK discovery and core behavior; it does **not** prove deployed Streamable HTTP, OAuth, TLS, LAN reachability or the performance target. Those are explicit member 3 acceptance deliverables.
 
-See:
+## Collaboration
 
-- `docs/09_ubuntu2404_deployment.md`
-- `docs/08_authorization_tls_design.md`
-- `deploy/keycloak/README.md`
-- `deploy/systemd/README.md`
-
-The LAN profile requires `AUTH_MODE=keycloak`, trusted Caddy internal CA, a configured Keycloak realm/client, and firewall rules limiting TCP 443. The MCP app and Keycloak bind only to loopback; PostgreSQL is internal to Docker. Compose deliberately gates Caddy behind the `lan` profile: start and validate PostgreSQL/Keycloak and the authenticated MCP service first, then explicitly run `docker compose --profile lan up -d caddy`.
-
-## Security and known acceptance gate
-
-Keycloak 26.8.1 labels Resource Indicators experimental for the newest MCP protocol revision. The server fails closed unless the token has the exact configured MCP audience/resource. Do not disable audience validation to work around an integration problem. Keep LAN exposure closed until a real integration test confirms `resource` -> `aud`, introspection claims, required scopes and cross-device TLS trust.
-
-The `systemd-journal` supplementary group enables journal access but is broader than the MCP alias list; this residual privilege is documented and must be reviewed during deployment.
+Use `team-handoff` as the shared integration baseline. Create feature branches from it and open PRs back into `team-handoff`; do not push directly to `main` or merge this handoff branch into `main` until all workstreams have passed their acceptance gates.
