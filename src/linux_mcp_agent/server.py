@@ -124,7 +124,7 @@ def build_asgi_app(settings: Settings) -> Starlette:
     mcp_app = mcp.streamable_http_app(transport_security=transport_security)
 
     @asynccontextmanager
-    async def lifespan(_: Starlette) -> AsyncGenerator[None, None]:
+    async def lifespan(_: Starlette) -> AsyncGenerator[None]:
         # Mounting an MCP ASGI app disables its built-in lifespan; the host app must
         # own the session manager or the first Streamable HTTP request fails.
         async with mcp.session_manager.run():
