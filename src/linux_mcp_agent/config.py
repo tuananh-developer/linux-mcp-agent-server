@@ -63,7 +63,7 @@ class Settings:
     log_level: str
 
     @classmethod
-    def from_env(cls) -> Settings
+    def from_env(cls) -> Settings:
         auth_mode = os.getenv("AUTH_MODE", "disabled").strip().lower()
         if auth_mode not in {"disabled", "keycloak"}:
             raise ConfigurationError("AUTH_MODE must be 'disabled' or 'keycloak'")
