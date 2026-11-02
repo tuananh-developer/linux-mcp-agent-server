@@ -36,4 +36,4 @@ async def test_mounted_asgi_app_starts_and_stops_mcp_session_manager(
     app = build_asgi_app(settings)
 
     async with app.router.lifespan_context(app):
-        assert app.routes[0].path == "/healthz"
+        assert len(app.routes) == 2

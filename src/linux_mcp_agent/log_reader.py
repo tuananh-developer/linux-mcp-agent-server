@@ -112,18 +112,25 @@ def load_log_sources(path: Path) -> dict[str, str]:
         raise LogReadError("Log source configuration file was not found") from exc
     except (OSError, json.JSONDecodeError) as exc:
         raise LogReadError("Log source configuration file is unreadable or invalid JSON") from exc
-    if not isinstance(raw, dict) or not raw:
-        raise LogReadError("Log source configuration must be a non-empty JSON object")
+    if (
+        not isinstance(raw, dict)
+        or not raw
+        or not all(isinstance(key, str) for key in raw)
+    ):
+        raise LogReadError("Log source configuration must be a non-empty string-keyed JSON object")
 
     sources: dict[str, str] = {}
-    for alias, config in raw.items():
-        if not isinstance(alias, str) or not _ALIAS_RE.fullmatch(alias):
+    for alias, config_object in raw.items():
+        if not _ALIAS_RE.fullmatch(alias):
             raise LogReadError("Log source configuration contains an invalid alias")
-        if not isinstance(config, dict) or not isinstance(config.get("unit"), str):
+        if not isinstance(config_object, dict):
             raise LogReadError(f"Log source '{alias}' must define a systemd unit")
-        unit = config["unit"]
+        raw_unit: object = config_object.get("unit")
+        if not isinstance(raw_unit, str):
+            raise LogReadError(f"Log source '{alias}' must define a systemd unit")
+        unit = raw_unit
         if not _UNIT_RE.fullmatch(unit) or not unit.endswith(".service"):
-            raise LogReadError(f"Log source '{alias}' has an invalid service unit")
+            raise LogReadError(f"Log source '{alias}' has an invalid systemd unit")
         sources[alias] = unit
     return sources
 
