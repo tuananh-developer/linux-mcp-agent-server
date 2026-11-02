@@ -42,9 +42,6 @@ jobs:
           uv lock
           uv sync --all-groups
 
-      - name: Ruff autofix preview
-        run: uv run ruff check --diff . || true
-
       - name: Ruff
         run: uv run ruff check .
 

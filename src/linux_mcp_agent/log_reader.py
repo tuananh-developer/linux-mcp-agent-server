@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 _ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@:-]{1,128}$")
 _SECRET_PATTERNS = (
