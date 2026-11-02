@@ -11,7 +11,7 @@ import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@:-]{1,128}$")
@@ -25,7 +25,7 @@ class LogReadError(RuntimeError):
     """Safe-to-display error from the journal reader."""
 
 
-def _run_journalctl_bounded(
+def run_journalctl_bounded(
     args: list[str],
     *,
     timeout_seconds: float,
@@ -140,23 +140,28 @@ def _redact(message: str) -> str:
 
 def _parse_entry(line: str) -> dict[str, Any] | None:
     try:
-        entry = json.loads(line)
+        entry_object: object = json.loads(line)
     except json.JSONDecodeError:
         return None
-    if not isinstance(entry, dict):
+    if (
+        not isinstance(entry_object, dict)
+        or not all(isinstance(key, str) for key in entry_object)
+    ):
         return None
+    entry = cast(dict[str, object], entry_object)
     raw_ts = entry.get("__REALTIME_TIMESTAMP")
     timestamp = None
     if isinstance(raw_ts, str) and raw_ts.isdigit():
         timestamp = datetime.fromtimestamp(int(raw_ts) / 1_000_000, UTC).isoformat()
     raw_priority = entry.get("PRIORITY")
-    try:
-        priority = int(raw_priority) if raw_priority is not None else None
-    except (TypeError, ValueError):
-        priority = None
-    message = entry.get("MESSAGE", "")
-    if not isinstance(message, str):
-        message = "[non-text journal message omitted]"
+    priority: int | None = None
+    if isinstance(raw_priority, (str, int, float)) and not isinstance(raw_priority, bool):
+        try:
+            priority = int(raw_priority)
+        except (TypeError, ValueError, OverflowError):
+            priority = None
+    raw_message: object = entry.get("MESSAGE", "")
+    message = raw_message if isinstance(raw_message, str) else "[non-text journal message omitted]"
     return {"timestamp": timestamp, "priority": priority, "message": _redact(message)}
 
 
@@ -169,7 +174,7 @@ def read_allowed_log(
     timeout_seconds: float = 1.5,
     max_output_bytes: int = 65536,
 ) -> dict[str, Any]:
-    if not isinstance(alias, str) or alias not in sources:
+    if alias not in sources:
         raise PermissionError("Log alias is not allowlisted")
     if not 1 <= lines <= 200:
         raise ValueError("lines must be between 1 and 200")

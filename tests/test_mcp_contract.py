@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from linux_mcp_agent.config import Settings
-from linux_mcp_agent.server import build_mcp_server
+from linux_mcp_agent.server import build_asgi_app, build_mcp_server
 
 
 @pytest.mark.asyncio
@@ -24,3 +24,16 @@ async def test_server_registers_the_required_mcp_interface(monkeypatch: pytest.M
     }
     assert [str(resource.uri) for resource in resources] == ["linux://system/summary"]
     assert [prompt.name for prompt in prompts] == ["health_check"]
+
+
+
+@pytest.mark.asyncio
+async def test_mounted_asgi_app_starts_and_stops_mcp_session_manager(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "disabled")
+    settings = Settings.from_env()
+    app = build_asgi_app(settings)
+
+    async with app.router.lifespan_context(app):
+        assert app.routes[0].path == "/healthz"

@@ -7,7 +7,12 @@ from typing import Any
 
 import pytest
 
-from linux_mcp_agent.log_reader import LogReadError, load_log_sources, read_allowed_log
+from linux_mcp_agent.log_reader import (
+    LogReadError,
+    load_log_sources,
+    read_allowed_log,
+    run_journalctl_bounded,
+)
 
 
 def test_load_log_sources(tmp_path: Path) -> None:
@@ -40,7 +45,7 @@ def test_read_allowed_log_uses_fixed_argv_and_redacts_secrets(monkeypatch: pytes
         return output + "\n", False, 0
 
     monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
-    monkeypatch.setattr("linux_mcp_agent.log_reader._run_journalctl_bounded", fake_run)
+    monkeypatch.setattr("linux_mcp_agent.log_reader.run_journalctl_bounded", fake_run)
     result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
 
     assert captured["args"] == [
@@ -64,7 +69,10 @@ def test_read_allowed_log_rejects_out_of_range_lines() -> None:
 
 
 def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", lambda _: "/usr/bin/journalctl")
+        def fake_which(_path: str) -> str:
+        return "/usr/bin/journalctl"
+
+    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
     def timeout(*args: Any, **kwargs: Any) -> None:
         raise TimeoutError("Journal query exceeded its configured time limit")
     monkeypatch.setattr("linux_mcp_agent.log_reader._run_journalctl_bounded", timeout)
@@ -73,9 +81,7 @@ def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_bounded_process_reader_caps_output() -> None:
-    from linux_mcp_agent.log_reader import _run_journalctl_bounded
-
-    output, truncated, return_code = _run_journalctl_bounded(
+    output, truncated, return_code = run_journalctl_bounded(
         [sys.executable, "-c", "print('x' * 10000)"],
         timeout_seconds=2.0,
         max_output_bytes=128,
@@ -86,10 +92,8 @@ def test_bounded_process_reader_caps_output() -> None:
 
 
 def test_bounded_process_reader_enforces_timeout() -> None:
-    from linux_mcp_agent.log_reader import _run_journalctl_bounded
-
     with pytest.raises(TimeoutError):
-        _run_journalctl_bounded(
+        run_journalctl_bounded(
             [sys.executable, "-c", "import time; time.sleep(1)"],
             timeout_seconds=0.05,
             max_output_bytes=128,

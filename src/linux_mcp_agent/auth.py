@@ -8,6 +8,7 @@ import json
 import logging
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
+from typing import Any, cast
 from urllib.request import ProxyHandler, Request, build_opener
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
@@ -41,13 +42,17 @@ class KeycloakIntrospectionVerifier(TokenVerifier):
         )
         try:
             with self._opener.open(request, timeout=2.0) as response:
-                payload = json.loads(response.read(65536).decode("utf-8"))
+                payload_object: object = json.loads(response.read(65536).decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError):
             logger.warning("Keycloak token introspection failed")
             return None
 
-        if not isinstance(payload, dict):
+        if (
+            not isinstance(payload_object, dict)
+            or not all(isinstance(key, str) for key in payload_object)
+        ):
             return None
+        payload = cast(dict[str, Any], payload_object)
         claims = validate_introspection_payload(
             payload,
             issuer=self._settings.issuer_url,

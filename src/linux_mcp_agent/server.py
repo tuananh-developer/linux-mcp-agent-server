@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Literal
 
-from mcp.server import MCPServer
+from mcp.server.mcpserver import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver.exceptions import ToolError
@@ -120,5 +122,16 @@ def build_asgi_app(settings: Settings) -> Starlette:
         allowed_origins=list(settings.allowed_origins),
     )
     mcp_app = mcp.streamable_http_app(transport_security=transport_security)
-    # Keep health checks outside the MCP bearer-auth sub-application.
-    return Starlette(routes=[Route("/healthz", _healthz, methods=["GET"]), Mount("/", app=mcp_app)])
+
+    @asynccontextmanager
+    async def lifespan(_: Starlette) -> AsyncIterator[None]:
+        # Mounting an MCP ASGI app disables its built-in lifespan; the host app must
+        # own the session manager or the first Streamable HTTP request fails.
+        async with mcp.session_manager.run():
+            yield
+
+    # Keep health checks outside the MCP bearer-auth sub-application and before Mount("/").
+    return Starlette(
+        routes=[Route("/healthz", _healthz, methods=["GET"]), Mount("/", app=mcp_app)],
+        lifespan=lifespan,
+    )
