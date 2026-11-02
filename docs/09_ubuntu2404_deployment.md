@@ -3,7 +3,7 @@
 ## Host prerequisites
 
 - Ubuntu 24.04 LTS x86_64, systemd and journald.
-- Python 3.14.10 (managed by uv 0.13.6), Git, curl, build tools for compiling C extensions where a wheel is unavailable.
+- Python 3.15.2 (managed by uv 0.13.6; CI also checks 3.14.10), Git, curl, build tools for compiling C extensions where a wheel is unavailable.
 - Docker Engine + Docker Compose plugin 5.6.1 for Keycloak, PostgreSQL and Caddy only.
 - Firewall: allow TCP 443 only from the selected LAN subnet/client IP. Do not expose 3000, 8080 or 5432.
 
@@ -11,7 +11,7 @@
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://astral.sh/uv/0.13.6/install.sh | sh
-uv python install 3.14.10
+uv python install 3.15.2
 uv lock
 uv sync --all-groups
 uv run ruff check .

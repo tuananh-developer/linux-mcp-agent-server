@@ -1,6 +1,6 @@
 # Linux MCP Agent Server
 
-A read-only Linux observability MCP server for external Agentic AI clients. Built with Python 3.14.10 and the official MCP Python SDK 2.3.0. Python 3.15.2 is newer, but the pinned MCP SDK and psutil release currently advertise support/wheels through Python 3.14; this project pins the newest runtime line with a validated dependency compatibility baseline. The primary acceptance environment is **Ubuntu 24.04 LTS**.
+A read-only Linux observability MCP server for external Agentic AI clients. Built with Python 3.15.2 (the latest stable Python release on 2026-11-02) and the official MCP Python SDK 2.3.0. CI checks both Python 3.14.10 and 3.15.2 because some upstream package classifiers have not yet caught up with the newest interpreter. The primary acceptance environment is **Ubuntu 24.04 LTS**.
 
 ## Scope
 
@@ -29,7 +29,7 @@ This repository does **not** host an LLM or implement the Agent runtime. The ext
 
 | Component | Version |
 |---|---:|
-| Python | 3.14.10 (latest compatible patch) |
+| Python | 3.15.2 (default); CI also checks 3.14.10 |
 | Hatchling build backend | 1.33.0 |
 | Official MCP Python SDK (`mcp`) | 2.3.0 |
 | psutil | 7.2.2 |
@@ -44,15 +44,15 @@ This repository does **not** host an LLM or implement the Agent runtime. The ext
 | PostgreSQL | 18.6 |
 | Docker Compose CLI | 5.6.1 |
 
-Exact direct Python dependencies are pinned in `pyproject.toml`. The `uv.lock` file is intentionally not fabricated: generate it with `uv lock` on a network-connected machine, review it, and commit it before deployment. CI currently resolves from exact direct pins until that lockfile is committed.
+Exact direct Python dependencies are pinned in `pyproject.toml`. Generate `uv.lock` with `uv lock` on a network-connected development machine, review and commit it before production deployment; CI currently resolves transitive dependencies from the exact direct pins.
 
 ## Local development
 
-Install uv 0.13.6 and Python 3.14.10:
+Install uv 0.13.6 and Python 3.15.2:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://astral.sh/uv/0.13.6/install.sh | sh
-uv python install 3.14.10
+uv python install 3.15.2
 uv lock
 uv sync --all-groups
 cp .env.example .env

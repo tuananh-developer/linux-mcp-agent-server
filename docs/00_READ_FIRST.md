@@ -4,7 +4,7 @@
 
 ## Locked baseline (02/11/2026)
 
-- Runtime: Python 3.14.10, pinned in `.python-version` (chosen because the pinned MCP SDK/psutil support matrix currently tops out at 3.14).
+- Runtime: Python 3.15.2, pinned in `.python-version`; CI checks Python 3.15.2 and 3.14.10. Python 3.14 is the minimum supported runtime. Some upstream package classifiers may lag Python 3.15, so compatibility is accepted only while the full CI matrix remains green.
 - MCP: official `mcp` Python SDK 2.3.0; protocol line follows SDK 2.x and the 2026-07-28 specification.
 - Linux acceptance target: Ubuntu 24.04 LTS x86_64.
 - Server transport: Streamable HTTP at `/mcp`, local backend `127.0.0.1:3000`.
@@ -30,7 +30,7 @@ The logs tool takes an alias only; the server maps that alias to a fixed systemd
 ## Local start
 
 ```bash
-uv python install 3.14.10
+uv python install 3.15.2
 uv lock
 uv sync --all-groups
 cp .env.example .env
