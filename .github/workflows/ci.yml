@@ -51,6 +51,15 @@ jobs:
       - name: Pytest
         run: uv run pytest
 
+      - name: Export resolved dependency lock
+        if: matrix.python-version == '3.15.2'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: uv-lock-python-3.15.2
+          path: uv.lock
+          if-no-files-found: error
+          retention-days: 1
+
   compose-config:
     name: Validate infrastructure Compose file
     runs-on: ubuntu-24.04
