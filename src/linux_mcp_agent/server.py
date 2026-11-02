@@ -15,7 +15,12 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 from linux_mcp_agent.config import Settings
-from linux_mcp_agent.system import get_disk_usage, get_system_metrics, list_processes, system_summary
+from linux_mcp_agent.system import (
+    get_disk_usage,
+    get_system_metrics,
+    list_processes,
+    system_summary,
+)
 
 LOG_READER_PENDING = (
     "NOT_IMPLEMENTED: this MCP contract is reserved for the Security & Infrastructure "
