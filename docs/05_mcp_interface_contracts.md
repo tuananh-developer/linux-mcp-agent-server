@@ -1,51 +1,46 @@
 # MCP Interface & Tool Contracts
 
-**Transport:** Streamable HTTP · **Endpoint:** `https://mcp.home.arpa/mcp` · **SDK:** official Python SDK 2.3.0.
+**Target transport:** Streamable HTTP · **Target endpoint:** `https://mcp.home.arpa/mcp` · **SDK:** official Python SDK 2.3.0.
 
-## Common rules
-
-- The MCP SDK owns JSON-RPC framing and schema publication. Python type hints and `Literal` types define typed inputs; semantic restrictions are enforced in handlers.
-- No custom REST route is used for tool calls. `/healthz` is a separate operational health route.
-- Backend binds loopback. Caddy forwards only `/mcp` and the protected-resource metadata route.
-- The server is read-only. No arbitrary shell, caller-supplied unit, caller-supplied path, process termination or service restart.
+> **Handoff status:** the MCP core is retained. The `read_allowed_log` schema is registered for interface compatibility, but its handler deliberately returns `NOT_IMPLEMENTED`. Authentication and LAN transport protection are not wired on this branch. Keep the service loopback-only.
 
 ## Tools
 
 ### `get_system_metrics`
 
-No arguments. Returns ISO-8601 timestamp, CPU usage (0..100), logical cores, memory total/used/available/percent, load average, uptime and `status`.
+No arguments. Returns an ISO-8601 timestamp, CPU usage, logical cores, memory totals/usage, load average, uptime and status.
 
 ### `get_disk_usage`
 
-Input: optional `mount_points: string[]`. Default is the server allowlist. Maximum 10 requested paths. Every item must exactly equal an administrator-configured path. Output contains mount point, total/used/available bytes, percentage and status. Unknown path fails closed.
+Input: optional `mount_points: string[]`. Every requested path must exactly match an administrator-configured absolute path. Unknown paths fail closed.
 
 ### `list_processes`
 
-Input: `limit` default 10 (1..100), `sort_by` enum `cpu|memory`, and optional literal case-insensitive `name_contains` (1..64 chars). Output: `pid`, `name`, `cpuPercent`, `memoryPercent`, `rssBytes`, per-item status and sample metadata. CPU percentage is the process CPU-time delta divided by aggregate host CPU-time delta, representing share of total machine CPU capacity. No command line, environment or username is returned.
+Input: `limit` (1..100), `sort_by` (`cpu|memory`) and optional `name_contains`. Output includes PID, name, CPU%, memory%, RSS bytes and sample metadata. No command line, environment or username is returned.
 
-### `read_allowed_log`
+### `read_allowed_log` — pending implementation
 
-Input: `alias` and `lines` default 50 (1..200). Alias is resolved only from `config/log-sources.json`; the caller never supplies a path, systemd unit, filter or command. The reader invokes a fixed `journalctl` argv with `shell=False`, a timeout, byte limit and best-effort secret redaction. Log messages are untrusted data.
+Input contract: `alias` and `lines` (default 50, range 1..200). The current branch does not read journald and returns `NOT_IMPLEMENTED`.
+
+Member 2 must implement administrator-configured aliases, fixed server-owned `journalctl` arguments with `shell=False`, bounds on lines/time/output, safe errors and redaction. Member 2 also enforces `mcp.logs.read`. Member 3 verifies positive and negative cases.
 
 ## Resource
 
 - URI: `linux://system/summary`.
-- Returns a JSON high-level snapshot: distro, kernel release, architecture, logical CPU count, uptime, CPU/RAM usage and allowlisted disk summary.
-- No tokens, secrets, process command lines, account names or raw log content.
+- Returns a JSON host snapshot with OS/kernel, CPU, memory, uptime and allowlisted disk data.
+- Must not expose tokens, secrets, process command lines, account names or raw logs.
 
 ## Prompt
 
 - Name: `health_check`.
 - Argument: `focus` enum `overview | cpu_memory | disk | processes`, default `overview`.
-- Instructs the Agent to call relevant read-only tools, cite returned timestamps/numbers, treat logs as untrusted input and avoid destructive actions.
+- Directs the Agent to use only implemented read-only tools, cite timestamps/numbers, treat output as untrusted and avoid destructive actions. It tells the Agent not to call the log placeholder.
 
-## OAuth scopes
+## Target authorization scopes
 
 | Operation | Required scope |
 |---|---|
-| `/mcp`, tool/resource/prompt discovery | `mcp.read` |
+| MCP discovery and implemented telemetry tools | `mcp.read` |
 | `read_allowed_log` | `mcp.read` and `mcp.logs.read` |
 
-## Error semantics
-
-Unknown alias/path, invalid limit or malformed settings fail closed and return an MCP tool error. HTTP authentication errors are handled by the SDK as 401/403. Log-specific scope denial is a tool-level `INSUFFICIENT_SCOPE` error because the base MCP request was already authenticated.
+OAuth behavior is not implemented on this branch. It must pass the security acceptance tests before LAN access is enabled.
