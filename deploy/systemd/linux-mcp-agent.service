@@ -1,0 +1,44 @@
+[Unit]
+Description=Linux MCP Agent Server (read-only observability)
+Documentation=https://github.com/tuananh-developer/linux-mcp-agent-server
+Wants=network-online.target
+After=network-online.target systemd-journald.service
+
+[Service]
+Type=simple
+User=linux-mcp-agent
+Group=linux-mcp-agent
+SupplementaryGroups=systemd-journal
+WorkingDirectory=/opt/linux-mcp-agent-server
+EnvironmentFile=/etc/linux-mcp-agent/server.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/linux-mcp-agent-server/.venv/bin/python -m linux_mcp_agent
+Restart=on-failure
+RestartSec=3s
+TimeoutStartSec=20s
+TimeoutStopSec=15s
+KillSignal=SIGINT
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ProtectProc=default
+ProcSubset=all
+ReadOnlyPaths=/proc /sys
+
+[Install]
+WantedBy=multi-user.target

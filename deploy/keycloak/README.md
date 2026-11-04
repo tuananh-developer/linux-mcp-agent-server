@@ -1,11 +1,21 @@
-# Keycloak resource-server setup — implementation brief
-
-> **Status on `team-handoff`:** requirements reference only. The Compose service and MCP OAuth implementation are absent from this branch. Member 2 owns implementation; member 3 verifies it with live positive/negative tests. This document is not proof of a running deployment.
-
+# Keycloak resource-server setup
 
 Keycloak 26.8.1 is the Authorization Server. The MCP process is only a resource server: it introspects access tokens and does not issue them. The container enables the `resource-indicators` feature because MCP requires resource-bound access tokens in the current protocol line. Keycloak documents this feature as experimental, so the integration must be explicitly tested against the pinned image before a LAN demo.
 
-## Realm and clients
+## Option A: Fast import using `realm-linux-agent.example.json`
+
+A pre-configured realm template is provided at `deploy/keycloak/realm-linux-agent.example.json` containing:
+- Realm `linux-agent` (`sslRequired: external`, 300s access token lifespan).
+- Client scopes `mcp.read` and `mcp.logs.read` (`include.in.token.scope=true`).
+- Confidential introspection client `linux-mcp-resource-server` with `resource_url=https://mcp.home.arpa/mcp`.
+- Confidential machine client `linux-mcp-agent-client` with service account enabled and an audience mapper binding `https://mcp.home.arpa/mcp` into both the access token and token introspection response.
+
+Steps:
+1. Copy `deploy/keycloak/realm-linux-agent.example.json` to an ignored local file (e.g. `/tmp/realm-linux-agent.json`) and replace `CHANGE_ME_RESOURCE_SERVER_SECRET` and `CHANGE_ME_AGENT_CLIENT_SECRET` with strong random secrets (`openssl rand -base64 32`).
+2. Import the file from the local Keycloak Admin Console (`http://127.0.0.1:8080/admin/` -> **Create Realm** -> **Browse** `/tmp/realm-linux-agent.json` -> **Create**), then delete `/tmp/realm-linux-agent.json`.
+3. Copy the `linux-mcp-resource-server` secret into `/etc/linux-mcp-agent/server.env` as `MCP_INTROSPECTION_CLIENT_SECRET`.
+
+## Option B: Manual realm and client creation
 
 Create a realm named `linux-agent` from the local Keycloak admin console (`https://auth.home.arpa/admin/`). The admin route is intentionally blocked from other LAN hosts.
 

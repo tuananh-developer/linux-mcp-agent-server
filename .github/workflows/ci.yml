@@ -10,13 +10,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   quality:
-    name: Python ${{ matrix.python-version }} quality and tests
+    name: Lint, typecheck and unit test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -26,36 +22,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
-      - name: Set up Python
-        uses: actions/setup-python@v7.1.0
+      - name: Install uv 0.13.6
+        uses: astral-sh/setup-uv@v9.3.0
         with:
-          python-version: ${{ matrix.python-version }}
+          version: "0.13.6"
+          enable-cache: false
 
-      - name: Install uv
-        run: python -m pip install --disable-pip-version-check "uv==0.13.6"
+      - name: Install Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
-      - name: Select the matrix interpreter for uv
-        run: uv python pin "${{ matrix.python-version }}"
-
-      - name: Resolve and install exact direct dependencies
+      - name: Resolve and sync exact direct dependencies
         run: |
           uv lock
-          uv sync --all-groups
+          uv sync --python ${{ matrix.python-version }} --all-groups
 
-      - name: Ruff
-        run: uv run ruff check .
-
-      - name: Pyright
-        run: uv run pyright
-
-      - name: Pytest
-        run: uv run pytest
-
-      - name: Export resolved dependency lock
+      - name: Export resolved lockfile for auditability
         if: matrix.python-version == '3.15.2'
-        uses: actions/upload-artifact@v7.0.2
+        run: test -s uv.lock
+
+      - name: Ruff lint
+        run: uv run --python ${{ matrix.python-version }} ruff check .
+
+      - name: Pyright strict typecheck
+        run: uv run --python ${{ matrix.python-version }} pyright
+
+      - name: Pytest unit tests
+        run: uv run --python ${{ matrix.python-version }} pytest
+
+      - name: Upload resolved uv.lock artifact
+        if: matrix.python-version == '3.15.2'
+        uses: actions/upload-artifact@v8.0.1
         with:
-          name: uv-lock-python-3.15.2
+          name: resolved-uv-lock-py3152
           path: uv.lock
           if-no-files-found: error
           retention-days: 1
+
+  compose-config:
+    name: Validate infrastructure Compose file
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Validate Compose model
+        working-directory: deploy/compose
+        run: docker compose --env-file .env.example -f compose.yaml config --quiet
