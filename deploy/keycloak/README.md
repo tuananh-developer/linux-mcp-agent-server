@@ -1,7 +1,4 @@
-# Keycloak resource-server setup — implementation brief
-
-> **Status on `team-handoff`:** requirements reference only. The Compose service and MCP OAuth implementation are absent from this branch. Member 2 owns implementation; member 3 verifies it with live positive/negative tests. This document is not proof of a running deployment.
-
+# Keycloak resource-server setup
 
 Keycloak 26.8.1 is the Authorization Server. The MCP process is only a resource server: it introspects access tokens and does not issue them. The container enables the `resource-indicators` feature because MCP requires resource-bound access tokens in the current protocol line. Keycloak documents this feature as experimental, so the integration must be explicitly tested against the pinned image before a LAN demo.
 
