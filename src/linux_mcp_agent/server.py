@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -53,32 +54,35 @@ def build_mcp_server(settings: Settings) -> MCPServer:
     sources = load_log_sources(settings.log_sources_file)
 
     @mcp.tool(name="get_system_metrics")
-    def get_system_metrics_tool() -> dict[str, object]:
+    async def get_system_metrics_tool() -> dict[str, object]:
         """Return a timestamped CPU, memory, load-average and uptime snapshot."""
-        return get_system_metrics()
+        return await asyncio.to_thread(get_system_metrics)
 
     @mcp.tool(name="get_disk_usage")
-    def get_disk_usage_tool(mount_points: list[str] | None = None) -> dict[str, object]:
+    async def get_disk_usage_tool(mount_points: list[str] | None = None) -> dict[str, object]:
         """Read usage for configured mount points only; unknown paths are rejected."""
-        return get_disk_usage(mount_points, settings.allowed_disk_paths)
+        return await asyncio.to_thread(get_disk_usage, mount_points, settings.allowed_disk_paths)
 
     @mcp.tool(name="list_processes")
-    def list_processes_tool(
+    async def list_processes_tool(
         limit: int = 10,
         sort_by: Literal["cpu", "memory"] = "cpu",
         name_contains: str | None = None,
     ) -> dict[str, object]:
         """List a bounded process snapshot without command lines or environment values."""
-        return list_processes(limit=limit, sort_by=sort_by, name_contains=name_contains)
+        return await asyncio.to_thread(
+            list_processes, limit=limit, sort_by=sort_by, name_contains=name_contains
+        )
 
     @mcp.tool(name="read_allowed_log")
-    def read_allowed_log_tool(alias: str, lines: int = 50) -> dict[str, object]:
+    async def read_allowed_log_tool(alias: str, lines: int = 50) -> dict[str, object]:
         """Read recent entries from a server-configured systemd unit alias."""
         if settings.auth_mode == "keycloak":
             token = get_access_token()
             if token is None or settings.logs_scope not in token.scopes:
                 raise ToolError(f"INSUFFICIENT_SCOPE: this tool requires {settings.logs_scope}")
-        return read_allowed_log(
+        return await asyncio.to_thread(
+            read_allowed_log,
             alias,
             lines,
             sources=sources,
@@ -88,9 +92,10 @@ def build_mcp_server(settings: Settings) -> MCPServer:
         )
 
     @mcp.resource("linux://system/summary", mime_type="application/json")
-    def system_summary_resource() -> str:
+    async def system_summary_resource() -> str:
         """Return a high-level JSON summary of the Linux host; no secrets or raw logs."""
-        return json.dumps(system_summary(settings.allowed_disk_paths), ensure_ascii=False)
+        summary = await asyncio.to_thread(system_summary, settings.allowed_disk_paths)
+        return json.dumps(summary, ensure_ascii=False)
 
     @mcp.prompt()
     def health_check(focus: Literal["overview", "cpu_memory", "disk", "processes"] = "overview") -> str:

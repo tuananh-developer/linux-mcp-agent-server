@@ -121,6 +121,14 @@ class Settings:
         if log_level not in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
             raise ConfigurationError("LOG_LEVEL must be a standard Python logging level")
 
+        journalctl_path = os.getenv("JOURNALCTL_PATH", "/usr/bin/journalctl").strip()
+        if (
+            not journalctl_path
+            or not Path(journalctl_path).is_absolute()
+            or ".." in Path(journalctl_path).parts
+        ):
+            raise ConfigurationError("JOURNALCTL_PATH must be an absolute path without traversal")
+
         settings = cls(
             app_env=app_env,
             auth_mode=auth_mode,
@@ -144,7 +152,7 @@ class Settings:
             log_sources_file=Path(
                 os.getenv("LOG_SOURCES_FILE", "config/log-sources.example.json")
             ).expanduser(),
-            journalctl_path=os.getenv("JOURNALCTL_PATH", "/usr/bin/journalctl").strip(),
+            journalctl_path=journalctl_path,
             journalctl_timeout_seconds=timeout,
             max_log_output_bytes=max_bytes,
             log_level=log_level,

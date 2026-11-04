@@ -148,3 +148,47 @@ async def test_keycloak_introspection_verifier_fails_closed_on_network_error(
     monkeypatch.setattr("linux_mcp_agent.auth.build_opener", failing_build_opener)
     verifier = KeycloakIntrospectionVerifier(settings)
     assert await verifier.verify_token("any-token") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_token", ["", "has space", "line\nbreak", "x" * 8193])
+async def test_keycloak_introspection_verifier_rejects_malformed_tokens_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+    bad_token: str,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    settings = Settings.from_env()
+    called = False
+
+    class UnreachableOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> object:
+            nonlocal called
+            called = True
+            raise AssertionError("Network should not be called for malformed token")
+
+    def unreachable_build_opener(*_args: object) -> UnreachableOpener:
+        return UnreachableOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", unreachable_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+    assert await verifier.verify_token(bad_token) is None
+    assert called is False
+
+
+def test_keycloak_realm_template_has_expected_clients_scopes_and_placeholders() -> None:
+    from pathlib import Path
+
+    realm_path = Path("deploy/keycloak/realm-linux-agent.example.json")
+    realm_data = json.loads(realm_path.read_text(encoding="utf-8"))
+    assert realm_data["realm"] == "linux-agent"
+    scopes = {scope["name"] for scope in realm_data["clientScopes"]}
+    assert {"mcp.read", "mcp.logs.read"} <= scopes
+    clients = {client["clientId"]: client for client in realm_data["clients"]}
+    assert (
+        clients["linux-mcp-resource-server"]["attributes"]["resource_url"]
+        == "https://mcp.home.arpa/mcp"
+    )
+    assert str(clients["linux-mcp-resource-server"]["secret"]).startswith("CHANGE_ME_")
+    assert str(clients["linux-mcp-agent-client"]["secret"]).startswith("CHANGE_ME_")

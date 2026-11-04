@@ -88,3 +88,13 @@ def test_settings_rejects_unknown_app_environment(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("APP_ENV", "staging-ish")
     with pytest.raises(ConfigurationError, match="APP_ENV"):
         Settings.from_env()
+
+
+@pytest.mark.parametrize("bad_path", ["journalctl", "/usr/bin/../bin/journalctl"])
+def test_rejects_invalid_journalctl_path(
+    monkeypatch: pytest.MonkeyPatch,
+    bad_path: str,
+) -> None:
+    monkeypatch.setenv("JOURNALCTL_PATH", bad_path)
+    with pytest.raises(ConfigurationError, match="JOURNALCTL_PATH"):
+        Settings.from_env()

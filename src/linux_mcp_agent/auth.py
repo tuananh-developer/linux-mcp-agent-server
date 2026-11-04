@@ -28,6 +28,8 @@ class KeycloakIntrospectionVerifier(TokenVerifier):
         self._opener = build_opener(ProxyHandler({}))
 
     async def verify_token(self, token: str) -> AccessToken | None:
+        if not 1 <= len(token) <= 8192 or any(ord(ch) <= 32 or ord(ch) == 127 for ch in token):
+            return None
         return await asyncio.to_thread(self._verify_sync, token)
 
     def _verify_sync(self, token: str) -> AccessToken | None:

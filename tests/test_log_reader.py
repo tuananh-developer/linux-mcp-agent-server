@@ -74,6 +74,37 @@ def test_read_allowed_log_rejects_unknown_alias() -> None:
 def test_read_allowed_log_rejects_out_of_range_lines() -> None:
     with pytest.raises(ValueError):
         read_allowed_log("ssh", 201, sources={"ssh": "ssh.service"})
+    with pytest.raises(ValueError):
+        read_allowed_log("ssh", True, sources={"ssh": "ssh.service"})
+
+
+def test_read_allowed_log_redacts_json_secrets_basic_auth_and_url_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = json.dumps({
+        "__REALTIME_TIMESTAMP": "1793520000000000",
+        "PRIORITY": "6",
+        "MESSAGE": (
+            'Authorization: Basic dXNlcjpwYXNz "client_secret": "s3cr3t" '
+            "https://admin:topsecret@auth.home.arpa/realms/linux-agent"
+        ),
+    })
+
+    def fake_which(_path: str) -> str:
+        return "/usr/bin/journalctl"
+
+    def fake_run(args: list[str], **kwargs: Any) -> tuple[str, bool, int]:
+        del args, kwargs
+        return output + "\n", False, 0
+
+    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
+    monkeypatch.setattr("linux_mcp_agent.log_reader.run_journalctl_bounded", fake_run)
+    result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
+    msg = result["content"][0]["message"]
+    assert "dXNlcjpwYXNz" not in msg
+    assert "s3cr3t" not in msg
+    assert "topsecret" not in msg
+    assert msg.count("[REDACTED]") == 3
 
 
 def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
