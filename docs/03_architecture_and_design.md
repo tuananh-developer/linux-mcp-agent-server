@@ -1,51 +1,40 @@
 # Architecture and design
 
-## Runtime topology
+> **team-handoff status:** this diagram is the target architecture, not the current deployed state. The branch retains the MCP core and local runtime only. Security, infrastructure and acceptance items are deliberately assigned to members 2 and 3.
+
+## Target topology
 
 ```mermaid
 flowchart TB
-  U[User] --> A[External AI Agent / MCP Client]
-  A -->|Streamable HTTP + Bearer| C[Caddy HTTPS :443]
-  C -->|loopback| M[Python MCP Server :3000]
-  C -->|OIDC discovery / token / JWKS| K[Keycloak :8080]
-  M -->|RFC 7662 introspection| K
-  M --> P[/proc and psutil/]
-  M --> J[journald via fixed journalctl argv]
-  M --> F[Allowlisted filesystem mount points]
-  K --> D[(PostgreSQL 18.6)]
+  U[User] --> A[External Agent / MCP Client]
+  A -->|Streamable HTTP + Bearer| C[Caddy HTTPS]
+  C --> M[Python MCP Server]
+  C --> K[Keycloak OIDC]
+  M -->|Token introspection| K
+  M --> P[Linux telemetry]
+  M --> J[journald]
+  K --> D[(PostgreSQL)]
 ```
 
-## Responsibilities
+## Current application layers
 
-- Agent/Host: natural-language understanding, model selection and inference, tool choice, result presentation.
-- MCP Client: MCP initialization, list tools/resources/prompts, invoke tools, OAuth client flow.
-- Caddy: TLS, host routing and strict route allowlist. Only port 443 is exposed to the LAN.
-- Keycloak: authorization server; creates and signs tokens. The MCP service never issues tokens.
-- MCP application: verifies each bearer token through Keycloak introspection, confirms exact issuer/expiry/audience/resource/scope, and invokes read-only Linux functions.
-- Linux: source of CPU/RAM, filesystem, process and journal data.
-- PostgreSQL: Keycloak persistence only.
+- `config.py`: minimal runtime settings, loopback binding, port validation and disk-path allowlist.
+- `system.py`: implemented CPU, memory, disk and process collectors.
+- `server.py`: MCP composition, tool/resource/prompt registration and `/healthz`. The `read_allowed_log` handler is a placeholder.
+- `__main__.py`: logging setup and Uvicorn entry point.
 
-## Python application layers
+The files `auth.py`, `auth_claims.py`, `log_reader.py`, Caddyfile, Compose model, systemd unit and production environment template are intentionally absent on this branch.
 
-- `config.py`: typed environment configuration, loopback-only backend guard.
-- `auth.py` + `auth_claims.py`: RFC 7662 introspection adapter and fail-closed claim validation.
-- `system.py`: psutil-based system/disk/process metrics.
-- `log_reader.py`: alias allowlist and bounded `journalctl` execution.
-- `server.py`: MCP Tools, Resource, Prompt and ASGI composition.
-- `__main__.py`: Uvicorn process entry point.
+## Target responsibilities
 
-Synchronous OS handlers run in the MCP SDK's worker thread. The log reader always uses an argv array with `shell=False`, fixed executable, timeout and output limits.
+- MCP Client: initialization, capability discovery, tool invocation and OAuth client flow.
+- MCP core: protocol handling, argument validation and read-only telemetry.
+- Member 2: Keycloak/OAuth, journald access, Caddy, Compose, systemd and Linux privilege controls.
+- Member 3: real HTTP/client tests, security regression tests, deployment acceptance, benchmarks and evidence.
+- Group leader: architecture, OOAD, MCP core, review and final integration.
 
-## Transport and routes
+## Target security design
 
-- MCP: `https://mcp.home.arpa/mcp`.
-- MCP protected resource metadata: `/.well-known/oauth-protected-resource/mcp`.
-- Health: `/healthz`, separate unauthenticated health route; backend is loopback-only.
-- Authorization server: `https://auth.home.arpa/realms/linux-agent`.
-- MCP process binds `127.0.0.1:3000`; Keycloak binds `127.0.0.1:8080`; PostgreSQL is internal to Docker network.
+The intended production design uses Keycloak as authorization server, the MCP app as resource server, Caddy as the only LAN ingress and a dedicated non-root systemd service. It requires `mcp.read` for MCP access and `mcp.logs.read` for journald. This behavior is not implemented on this branch. The app must remain loopback-only.
 
-## Authorization
-
-The SDK applies the base `mcp.read` scope to the MCP resource server. The token verifier additionally checks that `aud` contains the exact canonical resource URI. The log tool enforces `mcp.logs.read` before executing `journalctl`. The client credentials flow must request both the appropriate scope and `resource=https://mcp.home.arpa/mcp`.
-
-Keycloak Resource Indicators is experimental in the pinned Keycloak release. Do not open the LAN route until token issuance and introspection integration tests confirm audience binding.
+See `docs/10_team_workstream_handoff.md` for detailed ownership and acceptance criteria.

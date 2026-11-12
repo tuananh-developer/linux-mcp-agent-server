@@ -1,5 +1,7 @@
 # Ubuntu 24.04 LTS deployment
 
+> **Deployment target only on `team-handoff`:** the Compose model, Caddyfile, systemd unit and production environment template are intentionally absent. Member 2 must implement them; member 3 must validate the actual deployment. The commands below are not runnable until those deliverables exist.
+
 ## Host prerequisites
 
 - Ubuntu 24.04 LTS x86_64, systemd and journald.
