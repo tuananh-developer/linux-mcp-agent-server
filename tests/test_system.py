@@ -4,10 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-import linux_mcp_agent.system as system
-
 import pytest
 
+import linux_mcp_agent.system as system
 from linux_mcp_agent.system import (
     NotAllowedError,
     get_disk_usage,
