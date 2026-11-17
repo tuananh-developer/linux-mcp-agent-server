@@ -65,4 +65,5 @@ def validate_introspection_payload(
         "expires_at": int(exp),
         "client_id": client_id,
         "subject": subject,
+        "validated_audience": audience,
     }

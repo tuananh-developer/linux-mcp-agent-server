@@ -21,8 +21,8 @@ def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
-def get_system_metrics() -> dict[str, Any]:
-    cpu_percent = psutil.cpu_percent(interval=0.2)
+def get_system_metrics(interval: float = 0.1) -> dict[str, Any]:
+    cpu_percent = psutil.cpu_percent(interval=interval)
     memory = psutil.virtual_memory()
     try:
         load_average = list(psutil.getloadavg())

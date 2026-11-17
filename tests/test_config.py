@@ -98,3 +98,20 @@ def test_rejects_invalid_journalctl_path(
     monkeypatch.setenv("JOURNALCTL_PATH", bad_path)
     with pytest.raises(ConfigurationError, match="JOURNALCTL_PATH"):
         Settings.from_env()
+
+
+def test_settings_parses_cache_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "45.5")
+    settings = Settings.from_env()
+    assert settings.introspection_cache_ttl_seconds == 45.5
+
+
+@pytest.mark.parametrize("bad_ttl", ["-1", "301", "not-a-number"])
+def test_settings_rejects_invalid_cache_ttl(
+    monkeypatch: pytest.MonkeyPatch,
+    bad_ttl: str,
+) -> None:
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", bad_ttl)
+    with pytest.raises(ConfigurationError, match="MCP_INTROSPECTION_CACHE_TTL_SECONDS"):
+        Settings.from_env()
+

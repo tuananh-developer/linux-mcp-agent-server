@@ -130,6 +130,77 @@ async def test_keycloak_introspection_verifier_accepts_valid_response(
 
 
 @pytest.mark.asyncio
+async def test_keycloak_introspection_verifier_caches_tokens_in_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30.0")
+    settings = Settings.from_env()
+
+    payload = valid_payload()
+    payload["exp"] = 9_999_999_999
+
+    calls = 0
+
+    class CountingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    def counting_build_opener(*_args: object) -> CountingOpener:
+        return CountingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", counting_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+
+    token1 = await verifier.verify_token("cached-token")
+    assert token1 is not None
+    assert calls == 1
+
+    token2 = await verifier.verify_token("cached-token")
+    assert token2 is not None
+    assert calls == 1
+    assert token2.client_id == token1.client_id
+    assert token2.resource == "https://mcp.home.arpa/mcp"
+
+
+@pytest.mark.asyncio
+async def test_keycloak_introspection_verifier_bypasses_cache_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "0")
+    settings = Settings.from_env()
+
+    payload = valid_payload()
+    payload["exp"] = 9_999_999_999
+
+    calls = 0
+
+    class CountingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    def counting_build_opener(*_args: object) -> CountingOpener:
+        return CountingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", counting_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+
+    await verifier.verify_token("no-cache-token")
+    assert calls == 1
+    await verifier.verify_token("no-cache-token")
+    assert calls == 2
+
+
+@pytest.mark.asyncio
 async def test_keycloak_introspection_verifier_fails_closed_on_network_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
