@@ -2,7 +2,7 @@
 
 **Shared integration base:** `team-handoff` · **Team size:** 3
 
-This branch preserves the architecture/MCP core work while returning Security & Infrastructure implementation and QA/acceptance execution to the assigned owners. `main` remains unchanged as the full reference snapshot.
+This document defines the three workstreams and their ownership boundaries. The `integration/finalize-ubuntu2404` candidate combines the Technical Lead scope with the Security & Infrastructure implementation. Workstream 3 still owns independent integration, deployment and performance acceptance on the target Ubuntu host. Keep feature changes PR-based; do not merge to `main` until all acceptance gates have recorded evidence.
 
 ## Workstream 1 — Technical Leadership, Architecture and MCP Core
 
@@ -124,7 +124,7 @@ Keep the core unit tests, in-process MCP contract test and the real TCP/Streamab
 1. Independently execute and extend `tests/integration/` using the official MCP Client over actual Streamable HTTP. The candidate includes a local TCP smoke test; member 3 must additionally verify the deployed Ubuntu endpoint and the second LAN client.
 2. Add `tests/security/` for valid/invalid OAuth tokens, issuer/audience/resource/scopes, log scope, alias allowlist, command boundary, timeout, output limit and redaction.
 3. Add deployment smoke tests for Compose health, Caddy host/path behavior, TLS trust, loopback-only ports and a second LAN device.
-4. Add repeatable benchmarks under `tests/performance/` or `scripts/benchmark/`. Measure each tool separately and report p50/p95/p99, sample count, host CPU/RAM/OS, Python and SDK versions.
+4. Run and independently validate `scripts/benchmark_mcp.py` on the designated Ubuntu host. Measure each exposed tool separately and report p50/p95/p99, successful/error sample counts, host CPU/RAM/OS, Python and SDK versions. Extend the runner only when the acceptance environment reveals a concrete gap.
 5. Record results under `reports/acceptance/`. Target: p95 at or below 2 seconds per tool on Ubuntu 24.04, excluding external LLM inference.
 6. Maintain CI and a concise test report linking evidence to FR/NFR acceptance criteria. Include failures and limitations, not only successful screenshots.
 

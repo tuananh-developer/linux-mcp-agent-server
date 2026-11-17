@@ -15,3 +15,6 @@ htmlcov/
 .vscode/
 *.swp
 *.swo
+
+# Acceptance benchmark reports can include host and runtime metadata.
+/reports/acceptance/benchmark-*.json
