@@ -1,0 +1,11 @@
+{
+  "system-logind": {
+    "unit": "systemd-logind.service"
+  },
+  "ssh": {
+    "unit": "ssh.service"
+  },
+  "systemd-networkd": {
+    "unit": "systemd-networkd.service"
+  }
+}
