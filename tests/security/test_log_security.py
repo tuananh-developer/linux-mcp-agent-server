@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from linux_mcp_agent.log_reader import LogReadError, read_allowed_log
 
