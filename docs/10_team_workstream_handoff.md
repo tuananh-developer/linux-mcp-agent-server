@@ -2,7 +2,7 @@
 
 **Shared integration base:** `team-handoff` · **Team size:** 3
 
-This branch preserves the architecture/MCP core work while returning Security & Infrastructure implementation and QA/acceptance execution to the assigned owners. `main` remains unchanged as the full reference snapshot.
+The original handoff split implementation across three owners. The current integration now includes security, journald and deployment configuration. The lists below describe ownership and acceptance obligations; they do not imply that existing implementation must be removed or rewritten. End-to-end acceptance evidence remains pending.
 
 ## Workstream 1 — Architecture, OOAD and MCP core
 
@@ -12,19 +12,19 @@ Retained deliverables:
 - SRS, project charter/scope, architecture, OOAD/UML and MCP interface contract.
 - MCP composition in `src/linux_mcp_agent/server.py`.
 - Linux CPU, memory, disk and process collectors in `src/linux_mcp_agent/system.py`.
-- Minimal loopback runtime settings in `src/linux_mcp_agent/config.py`.
-- MCP Resource, Prompt, three implemented telemetry tools and the registered journald tool contract.
+- Validated loopback and production runtime settings in `src/linux_mcp_agent/config.py`.
+- MCP Resource, Prompt, four implemented tools, including bounded journald access.
 - Core unit tests and in-process MCP SDK Client contract test.
 
-Remaining responsibility: review incoming PRs, resolve interface conflicts, integrate the other workstreams and coordinate final acceptance. Do not count pending authentication, journald or deployment work as completed.
+Remaining responsibility: review incoming PRs, resolve interface conflicts, integrate the other workstreams and coordinate final acceptance. Review authentication, journald and deployment changes against the acceptance gates.
 
 ## Workstream 2 — Security & Infrastructure
 
 **Owner:** member 2.
 
-The implementation has deliberately been removed from this branch so the owner can design, implement, test and explain it. Use the architecture/security documents as requirements, not proof of a working stack.
+Implementation is present. The owner must review, test and explain it, and provide deployment evidence. Use the architecture/security documents as requirements, not proof of a working stack.
 
-### Required implementation
+### Implementation and verification responsibilities
 
 1. Extend `config.py` with validated production/security settings.
 2. Implement `src/linux_mcp_agent/auth_claims.py`: fail-closed checks for active state, issuer, mandatory expiry, not-before, exact audience/resource and scopes.
@@ -55,7 +55,7 @@ The implementation has deliberately been removed from this branch so the owner c
 
 Keep existing core unit tests and the in-process MCP Client contract test as a baseline. Add independent suites and produce repeatable evidence; do not remove tests merely to get a green build.
 
-### Required implementation
+### Implementation and verification responsibilities
 
 1. Add `tests/integration/` using the official MCP Client over actual Streamable HTTP. Verify initialization, capability discovery, tool calls, Resource reads and Prompt retrieval. Distinguish in-process tests from HTTP tests.
 2. Add `tests/security/` for valid/invalid OAuth tokens, issuer/audience/resource/scopes, log scope, alias allowlist, command boundary, timeout, output limit and redaction.

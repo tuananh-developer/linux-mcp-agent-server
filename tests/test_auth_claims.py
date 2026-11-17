@@ -222,7 +222,7 @@ async def test_keycloak_introspection_verifier_fails_closed_on_network_error(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad_token", ["", "has space", "line\nbreak", "x" * 8193])
+@pytest.mark.parametrize("bad_token", ["", "has space", "line\nbreak", "x" * 8193, "é", "token\x7f"])
 async def test_keycloak_introspection_verifier_rejects_malformed_tokens_without_network(
     monkeypatch: pytest.MonkeyPatch,
     bad_token: str,
@@ -263,3 +263,11 @@ def test_keycloak_realm_template_has_expected_clients_scopes_and_placeholders() 
     )
     assert str(clients["linux-mcp-resource-server"]["secret"]).startswith("CHANGE_ME_")
     assert str(clients["linux-mcp-agent-client"]["secret"]).startswith("CHANGE_ME_")
+
+
+@pytest.mark.parametrize("claim", ["exp", "nbf"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "invalid"])
+def test_rejects_invalid_time_claims(claim: str, value: object) -> None:
+    payload = valid_payload()
+    payload[claim] = value
+    assert validate(payload) is None

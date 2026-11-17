@@ -42,7 +42,7 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 ### 2.3 Operating environment
 
 - Ubuntu 24.04 LTS x86_64 is the primary acceptance target.
-- Python 3.14 and 3.15 are the CI compatibility targets; Python 3.15.2 is the pinned development runtime.
+- Python 3.14 and 3.15 are the CI compatibility targets; Python 3.14 is the development minor selected by `.python-version`.
 - The MCP application binds to loopback and is exposed to the LAN only through Caddy HTTPS.
 - Keycloak and PostgreSQL provide authorization and identity persistence; systemd supervises the native MCP process.
 
