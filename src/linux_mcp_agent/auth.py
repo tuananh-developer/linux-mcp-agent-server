@@ -69,7 +69,11 @@ class KeycloakIntrospectionVerifier(TokenVerifier):
             self._cache[token_key] = (access_token, expires_at)
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        if not 1 <= len(token) <= 8192 or any(ord(ch) <= 32 or ord(ch) == 127 for ch in token):
+        if (
+            not 1 <= len(token) <= 8192
+            or not token.isascii()
+            or any(ord(ch) <= 32 or ord(ch) == 127 for ch in token)
+        ):
             return None
         cached = self._get_cached(token)
         if cached is not None:

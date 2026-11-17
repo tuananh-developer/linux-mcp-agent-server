@@ -2,7 +2,7 @@
 
 A read-only Linux observability MCP server built with Python and the official MCP Python SDK 2.x. The primary acceptance target is **Ubuntu 24.04 LTS x86_64**.
 
-> **Team-handoff branch status:** this branch is a collaboration baseline, not a deployable release. The MCP core and its architecture documents are retained. Security/Infrastructure and QA/acceptance implementation work has deliberately been returned to the assigned team members. Keep this branch loopback-only; do not expose it to a LAN.
+> **Integration status:** core telemetry, journald, Keycloak introspection and deployment configurations are implemented. Real HTTP/OAuth/TLS/LAN, systemd and performance acceptance evidence is still pending. Keep development mode loopback-only.
 
 ## MCP interface contract
 
@@ -11,7 +11,7 @@ A read-only Linux observability MCP server built with Python and the official MC
 | Tool | `get_system_metrics` | Implemented in the MCP core |
 | Tool | `get_disk_usage` | Implemented in the MCP core |
 | Tool | `list_processes` | Implemented in the MCP core |
-| Tool | `read_allowed_log` | Contract registered; implementation intentionally pending |
+| Tool | `read_allowed_log` | Implemented; deployment acceptance pending |
 | Resource | `linux://system/summary` | Implemented in the MCP core |
 | Prompt | `health_check` | Implemented in the MCP core |
 
@@ -19,11 +19,12 @@ The external Agent/MCP Client owns model selection, inference, tool choice, conv
 
 ## Current implementation boundary
 
-- `system.py` contains the read-only CPU, memory, disk and process collectors.
-- `server.py` registers the MCP tools, resource, prompt and operational health route.
-- `config.py` contains only the minimal loopback runtime settings required by the core.
-- `read_allowed_log` deliberately returns a clear `NOT_IMPLEMENTED` tool error. The journald reader, log-source allowlist and its authorization policy belong to the Security & Infrastructure workstream.
-- Keycloak/OAuth implementation, Caddy configuration, Docker Compose infrastructure and the native systemd unit are intentionally absent from this branch. Their target requirements remain documented; they are not proof of a working deployment.
+- `system.py` collects read-only CPU, memory, disk and process metrics.
+- `server.py` registers four tools, the summary resource, health prompt and health route.
+- `config.py` validates loopback binding and production authentication settings.
+- `auth.py` and `auth_claims.py` implement Keycloak introspection and claim validation.
+- `log_reader.py` implements alias-only, bounded and redacted journald reads with a separate log scope.
+- `deploy/` contains Compose, Caddy, Keycloak and systemd configurations. Their presence does not prove a successful deployment.
 
 ## Architecture and requirements
 
@@ -70,7 +71,7 @@ uv run pyright
 uv run pytest
 ```
 
-CI runs the quality and test suite on Python 3.14.10 and 3.15.2. The existing in-process MCP Client test verifies SDK discovery and core behavior; it does **not** prove deployed Streamable HTTP, OAuth, TLS, LAN reachability or the performance target. Those are explicit member 3 acceptance deliverables.
+CI runs the quality and test suite on Python 3.14 and 3.15. The existing in-process MCP Client test verifies SDK discovery and core behavior; it does **not** prove deployed Streamable HTTP, OAuth, TLS, LAN reachability or the performance target. Those are explicit member 3 acceptance deliverables.
 
 ## Collaboration
 

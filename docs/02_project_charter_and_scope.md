@@ -23,31 +23,37 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 
 ## Functional requirements
 
-| ID | Requirement | Verification |
-|---|---|---|
-| FR-001 | The server shall expose MCP over Streamable HTTP at `/mcp`. | MCP client initialize and discovery test |
-| FR-002 | The server shall expose CPU, memory, load average and uptime through `get_system_metrics`. | Unit test and live host check |
-| FR-003 | The server shall return disk usage only for administrator-allowlisted absolute paths. | Allowlist positive/negative tests |
-| FR-004 | The server shall return a bounded process snapshot with PID, name, CPU%, RAM% and RSS bytes, without command lines or environment values. | Process reader unit tests |
-| FR-005 | The server shall read only configured journald aliases, with bounded lines, output bytes, execution time and best-effort secret redaction. | Log reader security tests |
-| FR-006 | The server shall expose a JSON system summary at `linux://system/summary`. | MCP resource discovery/read test |
-| FR-007 | The server shall expose a `health_check` prompt with a constrained focus argument. | MCP prompt discovery/get test |
-| FR-008 | The server shall require the configured base OAuth scope for MCP access and an additional log scope for journal reads. | Authorization unit and integration tests |
-| FR-009 | The server shall expose a separate operational health endpoint at `/healthz`. | HTTP health check |
+Requirement IDs and wording follow `docs/01_software_requirements_specification.md`, the authoritative acceptance baseline.
+
+| ID | Requirement |
+|---|---|
+| FR-001 | The server shall expose MCP over Streamable HTTP at `/mcp`. |
+| FR-002 | The server shall provide `get_system_metrics`, returning timestamped CPU, logical core count, memory, load average, uptime and status. |
+| FR-003 | The server shall provide `get_disk_usage`, returning capacity metrics only for exact administrator-allowlisted mount points. |
+| FR-004 | The server shall provide `list_processes`, with a limit from 1 to 100, CPU or memory sorting, and an optional bounded name filter. Returned process fields shall be limited to PID, name, CPU%, memory%, RSS bytes and status. |
+| FR-005 | The process reader shall detect process exit or PID reuse between samples and shall not combine measurements from different process identities. |
+| FR-006 | The server shall provide `read_allowed_log`, accepting an alias and a bounded line count only. The alias shall resolve to a configured systemd unit. |
+| FR-007 | Journal reads shall use a fixed server-controlled `journalctl` executable and argument list, disable shell interpretation, enforce time/output limits and redact common secret patterns. |
+| FR-008 | The server shall expose a JSON system summary at `linux://system/summary`. |
+| FR-009 | The server shall expose a `health_check` prompt with a constrained focus argument. |
+| FR-010 | The server shall expose `/healthz` as a separate operational health endpoint. |
+| FR-011 | The server shall require the configured base scope for MCP access and the additional log scope before reading journald. |
+| FR-012 | The server shall return structured, bounded results and safe errors without exposing tokens, client secrets, process command lines or process environment values. |
 
 ## Non-functional requirements
 
-| ID | Requirement | Verification |
-|---|---|---|
-| NFR-SEC-001 | The application shall remain read-only and shall not expose arbitrary shell execution or destructive host operations. | API review and security tests |
-| NFR-SEC-002 | The MCP process shall bind to loopback; LAN access shall pass through the TLS reverse proxy. | Configuration and socket inspection |
-| NFR-SEC-003 | Invalid, expired, wrong-issuer, wrong-audience or insufficient-scope tokens shall fail closed. | OAuth negative integration tests |
-| NFR-SEC-004 | Log access shall use fixed server-owned executable arguments with `shell=False`. | Code review and command-boundary tests |
-| NFR-PRF-001 | Each MCP tool shall achieve p95 response time at or below 2 seconds on the designated acceptance host, excluding external LLM inference. | Repeated benchmark with recorded host details |
-| NFR-PRF-002 | Process sampling shall use a bounded sample window and journal reads shall enforce configured time/output limits. | Unit tests and runtime measurements |
-| NFR-REL-001 | The project shall pass Ruff, strict Pyright and pytest in CI on supported Python versions. | GitHub Actions |
-| NFR-DEP-001 | The acceptance deployment shall run on Ubuntu 24.04 LTS x86_64 using a dedicated non-root systemd account. | Deployment checklist and system inspection |
-| NFR-MNT-001 | Runtime configuration shall be environment-driven; secrets shall not be committed to source control. | Configuration review and secret scan |
+| ID | Requirement |
+|---|---|
+| NFR-SEC-001 | The product shall remain read-only and shall not expose arbitrary shell execution, file mutation, process termination or service restart. |
+| NFR-SEC-002 | The application shall bind to loopback; Caddy shall be the only LAN-facing application entry point. |
+| NFR-SEC-003 | Invalid, expired, wrong-issuer, wrong-audience/resource or insufficient-scope access tokens shall fail closed. |
+| NFR-SEC-004 | Secrets shall be supplied through protected runtime configuration and shall not be committed to the repository. |
+| NFR-SEC-005 | Journal output shall be treated as untrusted content and shall be bounded and redacted on a best-effort basis. |
+| NFR-PRF-001 | Each MCP tool shall achieve p95 response time at or below 2 seconds on the designated acceptance host, excluding external LLM inference. |
+| NFR-PRF-002 | Process sampling shall be bounded to at most 1 second; journal reads shall enforce configured time and byte limits. |
+| NFR-REL-001 | Ruff, strict Pyright and pytest shall pass in CI for every supported Python matrix entry. |
+| NFR-DEP-001 | The primary acceptance deployment shall use Ubuntu 24.04 LTS x86_64 and a dedicated non-root systemd account. |
+| NFR-MNT-001 | Runtime configuration shall be environment-driven and documented; production mode shall require authenticated access. |
 
 ## System boundary and responsibilities
 

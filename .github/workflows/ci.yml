@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.14.7", "3.15.0rc2"]
+        python-version: ["3.14", "3.15"]
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -31,29 +31,28 @@ jobs:
       - name: Install Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Resolve and sync exact direct dependencies
+      - name: Sync committed lockfile
         run: |
-          uv lock
-          uv sync --python ${{ matrix.python-version }} --all-groups
+          uv sync --python ${{ matrix.python-version }} --all-groups --locked
 
       - name: Export resolved lockfile for auditability
-        if: matrix.python-version == '3.15.0rc2'
+        if: matrix.python-version == '3.15'
         run: test -s uv.lock
 
       - name: Ruff lint
-        run: uv run --python ${{ matrix.python-version }} ruff check .
+        run: uv run --locked --python ${{ matrix.python-version }} ruff check .
 
       - name: Pyright strict typecheck
-        run: uv run --python ${{ matrix.python-version }} pyright
+        run: uv run --locked --python ${{ matrix.python-version }} pyright
 
       - name: Pytest unit tests
-        run: uv run --python ${{ matrix.python-version }} pytest
+        run: uv run --locked --python ${{ matrix.python-version }} pytest
 
       - name: Upload resolved uv.lock artifact
-        if: matrix.python-version == '3.15.0rc2'
+        if: matrix.python-version == '3.15'
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: resolved-uv-lock-py3152
+          name: resolved-uv-lock-py315
           path: uv.lock
           if-no-files-found: error
           retention-days: 1

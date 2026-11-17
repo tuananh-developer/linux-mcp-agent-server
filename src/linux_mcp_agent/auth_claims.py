@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -22,7 +23,11 @@ def validate_introspection_payload(
         return None
 
     exp = payload.get("exp")
-    if not isinstance(exp, (int, float)) or isinstance(exp, bool):
+    if (
+        not isinstance(exp, (int, float))
+        or isinstance(exp, bool)
+        or (isinstance(exp, float) and not math.isfinite(exp))
+    ):
         return None
     current = time.time() if now is None else now
     if exp <= current:
@@ -32,6 +37,7 @@ def validate_introspection_payload(
     if not_before is not None and (
         isinstance(not_before, bool)
         or not isinstance(not_before, (int, float))
+        or (isinstance(not_before, float) and not math.isfinite(not_before))
         or not_before > current
     ):
         return None
