@@ -8,7 +8,6 @@ from typing import Any, cast
 import pytest
 
 import linux_mcp_agent.log_reader as log_reader
-
 from linux_mcp_agent.log_reader import (
     LogReadError,
     load_log_sources,
