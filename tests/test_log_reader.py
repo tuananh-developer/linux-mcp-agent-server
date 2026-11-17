@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
+
+import linux_mcp_agent.log_reader as log_reader
 
 from linux_mcp_agent.log_reader import (
     LogReadError,
@@ -141,6 +143,7 @@ def test_bounded_process_reader_enforces_timeout() -> None:
 
 
 
+
 def test_read_allowed_log_handles_out_of_range_journal_timestamp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -150,10 +153,22 @@ def test_read_allowed_log_handles_out_of_range_journal_timestamp(
         "MESSAGE": "service still started",
     })
 
-    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", lambda _path: "/usr/bin/journalctl")
+    def fake_which(_path: str) -> str:
+        return "/usr/bin/journalctl"
+
+    def fake_journalctl(
+        _args: list[str],
+        *,
+        timeout_seconds: float,
+        max_output_bytes: int,
+    ) -> tuple[str, bool, int]:
+        return output + "\\n", False, 0
+
+    monkeypatch.setattr(log_reader.shutil, "which", cast(Any, fake_which))
     monkeypatch.setattr(
-        "linux_mcp_agent.log_reader.run_journalctl_bounded",
-        lambda *_args, **_kwargs: (output + "\n", False, 0),
+        log_reader,
+        "run_journalctl_bounded",
+        cast(Any, fake_journalctl),
     )
 
     result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})

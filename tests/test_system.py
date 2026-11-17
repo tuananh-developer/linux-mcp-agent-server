@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
+
+import linux_mcp_agent.system as system
 
 import pytest
 
@@ -119,19 +122,24 @@ def test_cpu_semantics_are_machine_capacity_share() -> None:
 
 
 
+
 def test_process_sample_window_reports_actual_elapsed_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host_samples = iter([(1.0, 2.0, 3.0), (2.0, 2.0, 3.0)])
     clock_samples = iter([10.0, 10.25])
-    monkeypatch.setattr(
-        "linux_mcp_agent.system.psutil.virtual_memory",
-        lambda: SimpleNamespace(total=4096),
-    )
-    monkeypatch.setattr("linux_mcp_agent.system.psutil.cpu_times", lambda: next(host_samples))
-    monkeypatch.setattr("linux_mcp_agent.system.psutil.process_iter", lambda **_kwargs: [])
-    monkeypatch.setattr("linux_mcp_agent.system.time.sleep", lambda _seconds: None)
-    monkeypatch.setattr("linux_mcp_agent.system.time.monotonic", lambda: next(clock_samples))
+
+    def no_processes(**_kwargs: Any) -> list[Any]:
+        return []
+
+    def no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(system.psutil, "virtual_memory", lambda: SimpleNamespace(total=4096))
+    monkeypatch.setattr(system.psutil, "cpu_times", lambda: next(host_samples))
+    monkeypatch.setattr(system.psutil, "process_iter", cast(Any, no_processes))
+    monkeypatch.setattr(system.time, "sleep", cast(Any, no_sleep))
+    monkeypatch.setattr(system.time, "monotonic", lambda: next(clock_samples))
 
     result = list_processes(sample_window_seconds=0.1)
 
