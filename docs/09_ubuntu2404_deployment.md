@@ -45,6 +45,10 @@ Follow `deploy/systemd/README.md`. The MCP service binds to loopback only, uses 
 
 ## Acceptance checks
 
+Before starting the service, keep `MCP_RESOURCE_URI` and `MCP_REQUIRED_AUDIENCE` equal (trailing slashes are removed during configuration loading); a mismatch prevents startup. The production environment template uses the same canonical URL for both.
+
+Choose `MCP_INTROSPECTION_CACHE_TTL_SECONDS` according to the acceptable revocation/scope-change delay. The default is 30 seconds and the maximum is 300 seconds. Cached authorization may remain usable after a token is revoked or scopes are removed, until the earlier of the configured TTL or token expiry. Set the value to `0` to disable caching and check Keycloak on every verification; account for the increased traffic and availability dependency.
+
 - `curl http://127.0.0.1:3000/healthz` returns healthy.
 - Keycloak OIDC discovery is reachable over trusted HTTPS.
 - Access token contains the canonical MCP audience and required scope.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from types import SimpleNamespace
 from typing import Any
 from urllib.error import URLError
 
@@ -165,6 +166,54 @@ async def test_keycloak_introspection_verifier_caches_tokens_in_memory(
     assert calls == 1
     assert token2.client_id == token1.client_id
     assert token2.resource == "https://mcp.home.arpa/mcp"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_lifetime, cache_lifetime", [(120, 30), (5, 5)])
+async def test_introspection_cache_expires_at_ttl_or_token_expiry(
+    monkeypatch: pytest.MonkeyPatch, token_lifetime: int, cache_lifetime: int,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30")
+    elapsed = 0.0
+    epoch = 1_900_000_000
+    clock = SimpleNamespace(time=lambda: epoch + elapsed, monotonic=lambda: 100.0 + elapsed)
+    monkeypatch.setattr("linux_mcp_agent.auth.time", clock)
+    monkeypatch.setattr("linux_mcp_agent.auth_claims.time", clock)
+    payload = valid_payload()
+    payload["exp"] = epoch + token_lifetime
+    calls = 0
+
+    class CountingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    def counting_build_opener(*_args: object) -> CountingOpener:
+        return CountingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", counting_build_opener)
+    verifier = KeycloakIntrospectionVerifier(Settings.from_env())
+    assert await verifier.verify_token("expiring-token") is not None
+    assert calls == 1
+
+    elapsed = cache_lifetime - 0.01
+    assert await verifier.verify_token("expiring-token") is not None
+    assert calls == 1
+
+    # Revocation must be observed on the next introspection after the TTL.
+    # For a short-lived token, leave the response active to prove exp is enforced.
+    if token_lifetime > cache_lifetime:
+        payload["active"] = False
+    elapsed = float(cache_lifetime)
+    assert await verifier.verify_token("expiring-token") is None
+    assert calls == 2
+    elapsed += 1.0
+    assert await verifier.verify_token("expiring-token") is None
+    assert calls == 3
 
 
 @pytest.mark.asyncio

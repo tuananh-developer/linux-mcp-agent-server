@@ -16,7 +16,13 @@ The MCP SDK requires `mcp.read` globally. `KeycloakIntrospectionVerifier` calls 
 
 ## Resource indicator
 
+`MCP_RESOURCE_URI` and `MCP_REQUIRED_AUDIENCE` must be exactly equal after removing trailing slashes. Configuration loading rejects a mismatch before the server starts. If omitted, `MCP_REQUIRED_AUDIENCE` defaults to the normalized resource URI.
+
 Canonical resource URI: `https://mcp.home.arpa/mcp`. The MCP client must request `resource` with exactly this value and a scope containing the needed scopes. Keycloak 26.8.1 requires the experimental `resource-indicators` feature and a matching `resource_url` attribute on the resource-server client. The integration is not considered accepted until the token's `aud` and introspection response are verified on the deployed realm.
+
+## Introspection cache and revocation
+
+Successful introspection is cached in memory for `MCP_INTROSPECTION_CACHE_TTL_SECONDS` (default 30 seconds, allowed range 0–300). Each entry expires at the earlier of that TTL or the token's expiry. Revoking a token or removing its scopes in Keycloak does not invalidate an existing cache entry immediately: previously validated authorization can remain usable for up to the configured TTL, at most 300 seconds, bounded by token expiry. Set `MCP_INTROSPECTION_CACHE_TTL_SECONDS=0` to disable caching and introspect every verification. This increases Keycloak traffic and makes verification depend on its availability. Failed verification responses are not cached.
 
 ## TLS and LAN
 

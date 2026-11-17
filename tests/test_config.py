@@ -5,6 +5,33 @@ import pytest
 from linux_mcp_agent.config import ConfigurationError, Settings
 
 
+@pytest.mark.parametrize("audience", ["https://mcp.home.arpa/mcp", "https://mcp.home.arpa/mcp/"])
+def test_accepts_matching_resource_and_audience(
+    monkeypatch: pytest.MonkeyPatch, audience: str,
+) -> None:
+    monkeypatch.setenv("MCP_RESOURCE_URI", "https://mcp.home.arpa/mcp/")
+    monkeypatch.setenv("MCP_REQUIRED_AUDIENCE", audience)
+    settings = Settings.from_env()
+    assert settings.resource_uri == settings.required_audience == "https://mcp.home.arpa/mcp"
+
+
+@pytest.mark.parametrize("audience", ["https://other.example/mcp", "https://mcp.home.arpa/other"])
+def test_rejects_mismatching_resource_and_audience(
+    monkeypatch: pytest.MonkeyPatch, audience: str,
+) -> None:
+    monkeypatch.setenv("MCP_RESOURCE_URI", "https://mcp.home.arpa/mcp")
+    monkeypatch.setenv("MCP_REQUIRED_AUDIENCE", audience)
+    with pytest.raises(ConfigurationError, match="MCP_REQUIRED_AUDIENCE must equal MCP_RESOURCE_URI"):
+        Settings.from_env()
+
+
+def test_audience_defaults_to_normalized_resource(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MCP_RESOURCE_URI", "https://custom.example/mcp/")
+    monkeypatch.delenv("MCP_REQUIRED_AUDIENCE", raising=False)
+    settings = Settings.from_env()
+    assert settings.required_audience == settings.resource_uri == "https://custom.example/mcp"
+
+
 def test_settings_default_to_local_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (
         "APP_ENV",
