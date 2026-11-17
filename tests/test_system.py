@@ -116,3 +116,24 @@ def test_list_processes_rejects_reused_pid(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_cpu_semantics_are_machine_capacity_share() -> None:
     assert "total_host_cpu_time_delta" in list_processes(limit=1, sample_window_seconds=0)["cpuPercentSemantics"]
+
+
+
+def test_process_sample_window_reports_actual_elapsed_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host_samples = iter([(1.0, 2.0, 3.0), (2.0, 2.0, 3.0)])
+    clock_samples = iter([10.0, 10.25])
+    monkeypatch.setattr(
+        "linux_mcp_agent.system.psutil.virtual_memory",
+        lambda: SimpleNamespace(total=4096),
+    )
+    monkeypatch.setattr("linux_mcp_agent.system.psutil.cpu_times", lambda: next(host_samples))
+    monkeypatch.setattr("linux_mcp_agent.system.psutil.process_iter", lambda **_kwargs: [])
+    monkeypatch.setattr("linux_mcp_agent.system.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("linux_mcp_agent.system.time.monotonic", lambda: next(clock_samples))
+
+    result = list_processes(sample_window_seconds=0.1)
+
+    assert result["sampleWindowMs"] == 250
+    assert result["requestedSampleWindowMs"] == 100

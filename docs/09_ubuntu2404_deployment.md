@@ -1,54 +1,136 @@
 # Ubuntu 24.04 LTS deployment
 
-> **Deployment target only on `team-handoff`:** the Compose model, Caddyfile, systemd unit and production environment template are intentionally absent. Member 2 must implement them; member 3 must validate the actual deployment. The commands below are not runnable until those deliverables exist.
+This runbook describes the intended single-host deployment. Complete the checks in order. Do not expose the LAN-facing Caddy profile until local OAuth/resource validation and MCP health checks succeed.
 
 ## Host prerequisites
 
-- Ubuntu 24.04 LTS x86_64, systemd and journald.
-- Python 3.15.2 (managed by uv 0.13.6; CI also checks 3.14.10), Git, curl, build tools for compiling C extensions where a wheel is unavailable.
-- Docker Engine + Docker Compose plugin 5.6.1 for Keycloak, PostgreSQL and Caddy only.
-- Firewall: allow TCP 443 only from the selected LAN subnet/client IP. Do not expose 3000, 8080 or 5432.
+- Ubuntu 24.04 LTS x86_64 with systemd and journald.
+- Python 3.15.2 managed by uv 0.13.8; CI also tests Python 3.14.10.
+- Git, curl, build tools where a Python wheel is unavailable, Docker Engine and Docker Compose plugin.
+- DNS or `/etc/hosts` entries resolving `mcp.home.arpa` and `auth.home.arpa` to this host.
+- Firewall access to TCP 443 limited to the selected demo subnet/client addresses.
 
-## Prepare Python environment
+## 1. Prepare the repository and Python runtime
+
+Install uv 0.13.8 using the approved installation method, then:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://astral.sh/uv/0.13.6/install.sh | sh
 uv python install 3.15.2
-uv lock
-uv sync --all-groups
-uv run ruff check .
-uv run pyright
-uv run pytest
+git clone https://github.com/tuananh-developer/linux-mcp-agent-server.git
+cd linux-mcp-agent-server
+git checkout integration/finalize-ubuntu2404
+uv sync --locked --no-dev
 ```
 
-Commit `uv.lock` after resolving dependencies on a network-connected development machine. The project pins direct dependencies in `pyproject.toml`.
+The deployment must use a reviewed `uv.lock`. Do not run `uv lock` on the production host as a substitute for a committed lockfile.
 
-## Start infrastructure
+## 2. Start PostgreSQL and Keycloak
 
 ```bash
 cd deploy/compose
 cp .env.example .env
-# Edit all secrets before starting.
-# Start identity storage and Keycloak first. Caddy is intentionally profile-gated.
-docker compose --env-file .env -f compose.yaml up -d postgres keycloak
+chmod 0600 .env
 ```
 
-Configure the `linux-agent` realm and machine clients as described in `../keycloak/README.md`. Install the Caddy internal CA root on each test client. Ensure DNS or `/etc/hosts` resolves both service hostnames to the Ubuntu host. Set `APP_ENV=production` and `AUTH_MODE=keycloak` in `/etc/linux-mcp-agent/server.env`, start the MCP service, and verify real OAuth introspection/audience checks before opening LAN ingress. Only then start Caddy:
+Replace the PostgreSQL and Keycloak administrator passwords with separate, strong random values obtained from a secure secret source. Do not commit `.env`.
+
+Validate and start the identity services:
 
 ```bash
-docker compose --env-file .env -f compose.yaml --profile lan up -d caddy
+docker compose --env-file .env -f compose.yaml config --quiet
+docker compose --env-file .env -f compose.yaml up -d postgres keycloak
+docker compose --env-file .env -f compose.yaml ps
 ```
 
-## Install the MCP service
+Wait until both PostgreSQL and Keycloak report healthy. The Keycloak readiness probe uses its internal management interface on container port 9000; this port is not published.
 
-Follow `deploy/systemd/README.md`. The MCP service binds to loopback only, uses `AUTH_MODE=keycloak`, and reads `/etc/linux-mcp-agent/log-sources.json`.
+### PostgreSQL 18 named-volume note
 
-## Acceptance checks
+The PostgreSQL 18 official image stores its version-specific data directory below `/var/lib/postgresql`. The Compose file mounts the named volume at that parent directory. For a fresh installation, verify persistence by writing a test record, recreating the PostgreSQL container and confirming the record remains.
 
-- `curl http://127.0.0.1:3000/healthz` returns healthy.
-- Keycloak OIDC discovery is reachable over trusted HTTPS.
-- Access token contains the canonical MCP audience and required scope.
-- From a second LAN host, a valid MCP client can initialize and list tools/resources/prompts.
-- Invalid token, wrong audience, missing scopes and admin UI requests from LAN are rejected.
-- `systemctl show linux-mcp-agent -p User,Group,SupplementaryGroups` confirms the service account.
-- `ss -lntp` confirms 3000 and 8080 are bound to loopback only; PostgreSQL is not published.
+For an installation that was previously started with an older volume target, **do not remove or recreate the named volume blindly**. Back up Keycloak first (for example, with a database dump), migrate/restore into the corrected volume layout, and verify the realm and clients before deleting any old container or volume.
+
+## 3. Configure the Keycloak realm
+
+Follow [the Keycloak runbook](../deploy/keycloak/README.md). Import `deploy/keycloak/realm-linux-agent.example.json` after replacing both placeholder client secrets in a local, ignored copy.
+
+Configure:
+- Realm: `linux-agent`.
+- Resource server client: `linux-mcp-resource-server`.
+- External MCP client: `linux-mcp-agent-client`.
+- Base scope: `mcp.read`.
+- Optional journal scope: `mcp.logs.read`.
+- Canonical resource/audience: `https://mcp.home.arpa/mcp`.
+
+Confirm the actual token and introspection payload contain the expected issuer, audience, client ID, expiration and scopes. Do not bypass the audience validation if the Keycloak mapper or resource indicator is incorrect.
+
+## 4. Install and configure the native MCP service
+
+Follow [the systemd runbook](../deploy/systemd/README.md). Create the dedicated `linux-mcp-agent` service account and install the service environment file with owner root, group linux-mcp-agent and mode 0640.
+
+Set at least:
+- `APP_ENV=production`
+- `AUTH_MODE=keycloak`
+- Exact MCP/Keycloak hostname and resource URLs
+- `MCP_REQUIRED_AUDIENCE` equal to `MCP_RESOURCE_URI`
+- Resource-server client ID and secret
+- Allowed disk paths and log-source aliases
+
+The service must bind to `127.0.0.1:3000`. Start it and verify locally:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now linux-mcp-agent
+sudo systemctl status linux-mcp-agent
+curl -fsS http://127.0.0.1:3000/healthz
+```
+
+Before proceeding, run a real authorized MCP Client request from the server host and verify that an invalid token is rejected.
+
+## 5. Enable Caddy LAN ingress
+
+Install the Caddy internal CA root into a local test trust store and configure the host firewall for the intended client subnet.
+
+Start the LAN profile only after the local MCP service and Keycloak token verification work:
+
+```bash
+cd deploy/compose
+docker compose --env-file .env -f compose.yaml --profile lan up -d caddy
+docker compose --env-file .env -f compose.yaml ps
+```
+
+Distribute only the Caddy root certificate to authorized clients. Never copy the CA private key. From a second LAN device, verify DNS, HTTPS trust, MCP discovery and authenticated tool invocation.
+
+## 6. Verify network and security boundaries
+
+```bash
+ss -lntp | grep -E ':(443|3000|8080|5432|9000)\\b'
+systemctl show linux-mcp-agent -p User,Group,SupplementaryGroups
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml ps
+```
+
+Expected:
+- 3000 and 8080 bound to loopback only.
+- PostgreSQL 5432 is not published.
+- Keycloak management 9000 is not published.
+- Only intended HTTPS ingress is reachable from the LAN.
+- systemd runs under the dedicated non-root account.
+- Keycloak administration is unavailable from a second LAN device.
+- Missing/invalid token, wrong issuer/audience, missing base scope and missing log scope fail closed.
+
+## 7. Run acceptance and performance checks
+
+Run code checks and the actual HTTP integration test in CI. On the designated Ubuntu 24.04 host, run the benchmark with a valid bearer token:
+
+```bash
+MCP_BENCHMARK_URL=https://mcp.home.arpa/mcp \
+MCP_BENCHMARK_ACCESS_TOKEN='<read token>' \
+MCP_BENCHMARK_LOG_ALIAS=ssh \
+uv run python scripts/benchmark_mcp.py --iterations 100
+```
+
+Store the JSON output under `reports/acceptance/` and complete the acceptance checklist. Record host model/CPU/RAM, OS/kernel, Python and SDK versions, sample count, p50/p95/p99, failures and limitations. The p95 target is at or below 2 seconds per tool, excluding external LLM inference.
+
+## Rollback
+
+Record the deployed commit before an upgrade. If service health or acceptance checks fail, check out the previous reviewed commit, restore its locked dependencies and service unit, restart the service, and verify `/healthz`. Do not delete the Keycloak database volume as part of an application rollback.

@@ -1,46 +1,45 @@
 # Read this first
 
-**Linux MCP Agent Server** is a read-only MCP server for Linux observability. It does not host an LLM and does not implement an Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection, credentials and provider fallback.
+**Linux MCP Agent Server** is a read-only Linux observability MCP server. It does not host an LLM or implement an Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection, credentials and provider fallback.
 
-## Locked project baseline (02/11/2026)
+## Locked project baseline
 
-- Runtime: Python 3.15.2; CI checks Python 3.15.2 and 3.14.10.
-- MCP: official Python SDK 2.3.0; Streamable HTTP is the intended transport.
+- Runtime: Python 3.15.2; CI checks Python 3.14.10 and 3.15.2.
+- MCP: official Python SDK 2.3.0; deployed transport is Streamable HTTP.
 - Linux acceptance target: Ubuntu 24.04 LTS x86_64.
-- Intended LAN edge: Caddy 2.11.7 with internal TLS.
-- Intended authorization server: Keycloak 26.8.1.
-- Intended database: PostgreSQL 18.6 for Keycloak only.
-- Intended process manager: native systemd service using a dedicated non-root account.
-- Build backend: Hatchling 1.33.0. Python libraries: psutil 7.2.2, Pydantic 2.14.2, Starlette 1.10.0 and Uvicorn 0.54.0. Dev tools: pytest 9.2.0, pytest-asyncio 1.4.1, Ruff 0.17.3, Pyright 1.1.414 and uv 0.13.6.
+- Application endpoint: `/mcp`, backend bound to `127.0.0.1:3000`.
+- LAN edge: Caddy 2.11.7 with internal TLS.
+- Authorization server: Keycloak 26.8.1.
+- Database: PostgreSQL 18.6 for Keycloak persistence only; no application database.
+- Process manager: native systemd service under a dedicated non-root account.
+- Python runtime dependencies: MCP 2.3.0, psutil 7.2.2, Pydantic 2.14.2, Starlette 1.10.0 and Uvicorn 0.54.0.
+- Development tooling is pinned in `pyproject.toml` and `uv.lock`; the CI runtime uses uv 0.13.8.
 
-These are the project's target version decisions, not evidence that every component has been installed or accepted.
+Pinned versions describe the reproducible project baseline. They are not proof that the target Ubuntu host has been deployed or accepted.
 
-## Current state of the team-handoff branch
+## Integration candidate contents
 
-Implemented and retained:
-- MCP core: `get_system_metrics`, `get_disk_usage`, `list_processes`.
-- MCP Resource: `linux://system/summary`.
-- MCP Prompt: `health_check`.
-- Registered contract for `read_allowed_log`; the handler deliberately returns `NOT_IMPLEMENTED` until its owner implements the journald reader and authorization.
-- Loopback-only application settings and in-process official MCP Client contract tests.
+The `integration/finalize-ubuntu2404` branch brings together:
 
-Intentionally returned to the Security & Infrastructure workstream:
-- Keycloak token introspection, OAuth claim and scope validation.
-- Journald alias configuration and bounded/redacted log reader.
-- Keycloak/PostgreSQL/Caddy Docker Compose infrastructure.
-- Caddy route and TLS configuration.
-- Native systemd service, production environment template and deployment procedure.
+- MCP Core: four Tools, one Resource, one Prompt and read-only Linux telemetry.
+- OAuth/Keycloak token introspection and scope enforcement.
+- Bounded journald access through administrator-configured aliases.
+- Caddy route/TLS configuration, PostgreSQL/Keycloak/Caddy Compose model and native systemd unit.
+- Unit tests, in-process MCP contract coverage and an actual Streamable HTTP client test over TCP.
+- A benchmark runner that emits per-tool latency distributions and host metadata.
+- Technical Lead responsibilities, updated architecture/design documentation and acceptance gates.
 
-Intentionally returned to the QA / Integration workstream:
-- Real Streamable HTTP client integration.
-- Keycloak positive/negative authorization tests.
-- Caddy/TLS and second-LAN-device acceptance.
-- systemd privilege/deployment verification.
-- p95 performance benchmarks, report and acceptance evidence.
+The branch also includes fixes for PostgreSQL 18 volume layout, Keycloak readiness checks, audience/resource configuration consistency, malformed token timestamps, invalid journal timestamps and measured process sampling duration.
 
-**Important:** this branch has no working OAuth protection or LAN deployment. Do not expose the application outside loopback. The documents under `docs/07`–`docs/09` and `deploy/*/README.md` describe the target design and acceptance criteria only.
+## Safety boundary
 
-## MCP interface contract
+- The MCP service binds to loopback; Caddy is the only intended LAN entry point.
+- OAuth validation fails closed. Production mode requires Keycloak authentication.
+- Log reads accept aliases only; systemd unit names and journalctl arguments are server-controlled.
+- Process command lines, environment variables, usernames, tokens and client secrets are not returned.
+- No arbitrary shell, mutation, process kill or service restart functionality is exposed.
+
+## MCP interface
 
 Tools: `get_system_metrics`, `get_disk_usage`, `list_processes`, `read_allowed_log`.
 
@@ -48,13 +47,10 @@ Resource: `linux://system/summary`.
 
 Prompt: `health_check`.
 
-## Local start
+Base scope: `mcp.read`. Additional journal scope: `mcp.logs.read`.
 
-```bash
-uv sync --all-groups
-cp .env.example .env
-set -a; source .env; set +a
-uv run python -m linux_mcp_agent
-```
+## Validation boundary
 
-Default bind: `127.0.0.1:3000`. Keep it loopback-only.
+A green CI run proves only the automated checks executed by CI. Final acceptance still requires evidence collected on Ubuntu 24.04 LTS: Keycloak positive/negative token flows, trusted Caddy TLS from a second LAN device, loopback-only socket exposure, systemd non-root/sandbox inspection, PostgreSQL volume persistence and repeatable per-tool p95 measurements.
+
+Do not claim these host-level checks have passed until the raw commands, outputs, environment details and limitations are recorded under `reports/acceptance/`.

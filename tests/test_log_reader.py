@@ -138,3 +138,25 @@ def test_bounded_process_reader_enforces_timeout() -> None:
             timeout_seconds=0.05,
             max_output_bytes=128,
         )
+
+
+
+def test_read_allowed_log_handles_out_of_range_journal_timestamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = json.dumps({
+        "__REALTIME_TIMESTAMP": "99999999999999999999",
+        "PRIORITY": "6",
+        "MESSAGE": "service still started",
+    })
+
+    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", lambda _path: "/usr/bin/journalctl")
+    monkeypatch.setattr(
+        "linux_mcp_agent.log_reader.run_journalctl_bounded",
+        lambda *_args, **_kwargs: (output + "\n", False, 0),
+    )
+
+    result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
+
+    assert result["content"][0]["timestamp"] is None
+    assert result["content"][0]["message"] == "service still started"

@@ -1,63 +1,101 @@
 # OOAD analysis and UML
 
-> This describes the current `team-handoff` branch. Security and deployment implementation has been returned to member 2.
+## Design overview
 
-## Current modules
+The application separates MCP protocol composition, environment configuration, identity validation, journal access and Linux telemetry. Infrastructure services are deployed independently from the Python MCP process.
+
+## Module responsibilities
 
 | Module | Responsibility |
 |---|---|
-| `config.py` | Minimal local runtime configuration and loopback/path constraints |
-| `server.py` | MCP composition, tools, resource, prompt and health route |
-| `system.py` | CPU, memory, disk and process telemetry |
-| `__main__.py` | Logging and Uvicorn entry point |
+| `config.py` | Immutable environment settings, URL/resource validation, loopback constraints and execution bounds |
+| `server.py` | MCP composition, Tools, Resource, Prompt, auth wiring and ASGI lifecycle |
+| `system.py` | CPU, memory, load, uptime, disk, process and host-summary collectors |
+| `auth.py` | Async token-verifier adapter for Keycloak introspection |
+| `auth_claims.py` | Pure validation of introspection claims |
+| `log_reader.py` | Alias mapping, fixed journalctl arguments, time/output caps and redaction |
+| `__main__.py` | Logging and Uvicorn startup |
 
-The modules `auth.py`, `auth_claims.py` and `log_reader.py` are intentionally absent. Member 2 implements them and integrates the results into `server.py`.
+## Main runtime sequence
 
-## Design principles
+```mermaid
+sequenceDiagram
+  participant Client as External MCP Client
+  participant Caddy
+  participant MCP as MCP Server
+  participant Auth as Keycloak
+  participant OS as Linux Host
 
-- Separate MCP registration, runtime configuration and Linux telemetry.
-- Keep telemetry functions independent from MCP protocol classes.
-- Restrict caller-supplied disk paths to the administrator allowlist.
-- Bound process sampling and treat collected data as untrusted output.
+  Client->>Caddy: HTTPS MCP request + Bearer token
+  Caddy->>MCP: Forward to loopback /mcp
+  MCP->>Auth: RFC 7662 token introspection
+  Auth-->>MCP: active, iss, exp, aud, scope
+  Note over MCP: Validate mcp.read and resource binding
+  alt read_allowed_log
+    MCP->>MCP: Require mcp.logs.read
+    MCP->>OS: journalctl with server-owned argv
+  else telemetry tool
+    MCP->>OS: Read psutil/statvfs telemetry
+  end
+  OS-->>MCP: Bounded structured data
+  MCP-->>Caddy: MCP result
+  Caddy-->>Client: HTTPS response
+```
 
-## Use cases
-
-**UC-01 — Host overview:** the client invokes `get_system_metrics`, `get_disk_usage` and `list_processes`; the server returns structured measurements for the Agent to summarize.
-
-**UC-02 — Journal access (pending):** `read_allowed_log` remains discoverable but returns `NOT_IMPLEMENTED`. No journal command runs on this branch. Member 2 owns the alias allowlist, bounded reader and authorization; member 3 owns independent regression tests.
-
-**UC-03 — Context:** the client reads `linux://system/summary` and may retrieve the `health_check` prompt.
-
-## Current composition
+## Class/module view
 
 ```mermaid
 classDiagram
   class Settings {
     +str host
     +int port
-    +tuple allowed_hosts
-    +tuple allowed_origins
+    +str resource_uri
+    +str required_audience
     +tuple allowed_disk_paths
     +from_env()
+  }
+  class KeycloakIntrospectionVerifier {
+    +verify_token(token)
+    -_verify_sync(token)
+  }
+  class AuthClaims {
+    +validate_introspection_payload(payload)
   }
   class MCPServer {
     <<MCP SDK>>
     +tool()
     +resource()
     +prompt()
+    +streamable_http_app()
+  }
+  class LinuxTelemetry {
+    +get_system_metrics()
+    +get_disk_usage()
+    +list_processes()
+    +system_summary()
+  }
+  class JournalReader {
+    +load_log_sources()
+    +read_allowed_log()
+    +run_journalctl_bounded()
   }
   class Starlette {
-    <<ASGI framework>>
-    +routes
+    <<ASGI host>>
     +lifespan
+    +healthz
   }
-  MCPServer ..> Settings
+  Settings --> KeycloakIntrospectionVerifier
+  KeycloakIntrospectionVerifier --> AuthClaims
+  MCPServer --> LinuxTelemetry
+  MCPServer --> JournalReader
   Starlette o-- MCPServer
 ```
 
-## Traceability
+## Security and object constraints
 
-- System telemetry FRs are implemented in `system.py`.
-- MCP composition, resource, prompt and `/healthz` are in `server.py`.
-- Journald and OAuth requirements remain pending.
-- The in-process SDK Client test is not proof of real HTTP, TLS, LAN or production authorization acceptance.
+- The configuration object is immutable after construction.
+- Token validation rejects malformed or non-finite NumericDate claims rather than allowing them to raise during request authentication.
+- Process identity is checked using PID plus creation time to avoid mixing samples after PID reuse.
+- Journal aliases map to configured `.service` units; caller input is never interpolated into a shell command.
+- The journal reader uses `shell=False`, bounded lines, execution timeout, byte limit and best-effort redaction.
+- PostgreSQL belongs to the Keycloak persistence boundary, not the application data model.

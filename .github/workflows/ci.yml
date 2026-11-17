@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.14.7", "3.15.0rc2"]
+        python-version: ["3.14.10", "3.15.2"]
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -37,7 +37,7 @@ jobs:
           uv sync --python ${{ matrix.python-version }} --all-groups
 
       - name: Export resolved lockfile for auditability
-        if: matrix.python-version == '3.15.0rc2'
+        if: matrix.python-version == '3.15.2'
         run: test -s uv.lock
 
       - name: Ruff lint

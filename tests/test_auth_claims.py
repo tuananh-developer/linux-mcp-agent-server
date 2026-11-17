@@ -80,6 +80,20 @@ def test_rejects_future_not_before() -> None:
     assert validate(payload) is None
 
 
+@pytest.mark.parametrize("invalid_date", [float("nan"), float("inf"), float("-inf")])
+def test_rejects_non_finite_expiration(invalid_date: float) -> None:
+    payload = valid_payload()
+    payload["exp"] = invalid_date
+    assert validate(payload) is None
+
+
+@pytest.mark.parametrize("invalid_date", [float("nan"), float("inf"), float("-inf")])
+def test_rejects_non_finite_not_before(invalid_date: float) -> None:
+    payload = valid_payload()
+    payload["nbf"] = invalid_date
+    assert validate(payload) is None
+
+
 def test_rejects_missing_required_scope() -> None:
     payload = valid_payload()
     payload["scope"] = "mcp.logs.read"

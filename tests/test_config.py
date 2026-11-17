@@ -98,3 +98,13 @@ def test_rejects_invalid_journalctl_path(
     monkeypatch.setenv("JOURNALCTL_PATH", bad_path)
     with pytest.raises(ConfigurationError, match="JOURNALCTL_PATH"):
         Settings.from_env()
+
+
+
+def test_resource_audience_must_match_sdk_resource_uri(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MCP_RESOURCE_URI", "https://mcp.home.arpa/mcp")
+    monkeypatch.setenv("MCP_REQUIRED_AUDIENCE", "https://another.example/mcp")
+    with pytest.raises(ConfigurationError, match="must exactly match"):
+        Settings.from_env()
