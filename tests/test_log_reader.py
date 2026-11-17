@@ -161,7 +161,7 @@ def test_read_allowed_log_handles_out_of_range_journal_timestamp(
         timeout_seconds: float,
         max_output_bytes: int,
     ) -> tuple[str, bool, int]:
-        return output + "\\n", False, 0
+        return output + "\n", False, 0
 
     monkeypatch.setattr(log_reader.shutil, "which", cast(Any, fake_which))
     monkeypatch.setattr(
