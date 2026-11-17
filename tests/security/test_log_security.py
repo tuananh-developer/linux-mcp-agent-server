@@ -1,10 +1,7 @@
-
-
-
-import pytest 
-
-from linux_mcp_agent.log_reader import LogReadError, read_allowed_log
 from unittest.mock import patch
+
+import pytest
+from linux_mcp_agent.log_reader import LogReadError, read_allowed_log
 
 @pytest.fixture
 def mock_sources():
