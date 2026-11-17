@@ -46,50 +46,52 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
     results: dict[str, Any] = {}
 
     timeout = httpx2.Timeout(30.0, read=300.0)
-    async with httpx2.AsyncClient(headers=headers, timeout=timeout) as http_client:
-        async with streamable_http_client(args.url, http_client=http_client) as transport:
-            async with Client(transport) as client:
-                available = {tool.name for tool in (await client.list_tools()).tools}
-                missing = [name for name, _ in tool_specs if name not in available]
-                if missing:
-                    raise RuntimeError(f"Server does not expose required tools: {', '.join(missing)}")
+    async with (
+        httpx2.AsyncClient(headers=headers, timeout=timeout) as http_client,
+        streamable_http_client(args.url, http_client=http_client) as transport,
+        Client(transport) as client,
+    ):
+        available = {tool.name for tool in (await client.list_tools()).tools}
+        missing = [name for name, _ in tool_specs if name not in available]
+        if missing:
+            raise RuntimeError(f"Server does not expose required tools: {', '.join(missing)}")
 
-                for tool_name, arguments in tool_specs:
-                    # One warm-up call is excluded from the measured sample set.
-                    warmup = await client.call_tool(tool_name, arguments)
-                    if warmup.is_error:
-                        raise RuntimeError(f"Warm-up call failed for {tool_name}")
+        for tool_name, arguments in tool_specs:
+            # One warm-up call is excluded from the measured sample set.
+            warmup = await client.call_tool(tool_name, arguments)
+            if warmup.is_error:
+                raise RuntimeError(f"Warm-up call failed for {tool_name}")
 
-                    samples_ms: list[float] = []
-                    errors = 0
-                    error_types: dict[str, int] = {}
-                    for _ in range(args.iterations):
-                        started = time.perf_counter()
-                        try:
-                            response = await client.call_tool(tool_name, arguments)
-                            elapsed_ms = (time.perf_counter() - started) * 1000
-                            if response.is_error:
-                                errors += 1
-                                error_types["McpToolError"] = error_types.get("McpToolError", 0) + 1
-                            else:
-                                samples_ms.append(elapsed_ms)
-                        except Exception as exc:  # Report only exception types; never dump response data.
-                            errors += 1
-                            error_name = type(exc).__name__
-                            error_types[error_name] = error_types.get(error_name, 0) + 1
+            samples_ms: list[float] = []
+            errors = 0
+            error_types: dict[str, int] = {}
+            for _ in range(args.iterations):
+                started = time.perf_counter()
+                try:
+                    response = await client.call_tool(tool_name, arguments)
+                    elapsed_ms = (time.perf_counter() - started) * 1000
+                    if response.is_error:
+                        errors += 1
+                        error_types["McpToolError"] = error_types.get("McpToolError", 0) + 1
+                    else:
+                        samples_ms.append(elapsed_ms)
+                except Exception as exc:  # Report only exception types; never dump response data.
+                    errors += 1
+                    error_name = type(exc).__name__
+                    error_types[error_name] = error_types.get(error_name, 0) + 1
 
-                    results[tool_name] = {
-                        "requestedSamples": args.iterations,
-                        "successfulSamples": len(samples_ms),
-                        "errors": errors,
-                        "errorTypes": error_types,
-                        "p50Ms": _percentile(samples_ms, 0.50),
-                        "p95Ms": _percentile(samples_ms, 0.95),
-                        "p99Ms": _percentile(samples_ms, 0.99),
-                        "minMs": round(min(samples_ms), 3) if samples_ms else None,
-                        "maxMs": round(max(samples_ms), 3) if samples_ms else None,
-                        "meanMs": round(statistics.fmean(samples_ms), 3) if samples_ms else None,
-                    }
+            results[tool_name] = {
+                "requestedSamples": args.iterations,
+                "successfulSamples": len(samples_ms),
+                "errors": errors,
+                "errorTypes": error_types,
+                "p50Ms": _percentile(samples_ms, 0.50),
+                "p95Ms": _percentile(samples_ms, 0.95),
+                "p99Ms": _percentile(samples_ms, 0.99),
+                "minMs": round(min(samples_ms), 3) if samples_ms else None,
+                "maxMs": round(max(samples_ms), 3) if samples_ms else None,
+                "meanMs": round(statistics.fmean(samples_ms), 3) if samples_ms else None,
+            }
 
     return {
         "schemaVersion": 1,
