@@ -141,6 +141,7 @@ async def test_mounted_asgi_app_starts_and_stops_mcp_session_manager(
     app = build_asgi_app(settings)
 
     async with app.router.lifespan_context(app):
+        # Starlette normalizes Mount("/") to an empty path string.
         assert {route.path for route in app.routes if isinstance(route, (Route, Mount))} >= {
-            "/healthz", "/",
+            "/healthz", "",
         }
