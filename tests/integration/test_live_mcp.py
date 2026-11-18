@@ -1,5 +1,4 @@
 import os
-from typing import Dict
 
 import httpx
 import pytest
@@ -8,7 +7,7 @@ import pytest
 LIVE_HOST: str = os.getenv("MCP_LIVE_HOST", "https://<IP_CHUA_CO>")
 VALID_TOKEN: str = os.getenv("MCP_VALID_TOKEN", "<TOKEN_CHUA_CO>")
 
-INVALID_TOKENS: Dict[str, str] = {
+INVALID_TOKENS: dict[str, str] = {
     "expired": "<EXPIRED_TOKEN>",
     "wrong_issuer": "<WRONG_ISSUER_TOKEN>",
     "wrong_audience": "<WRONG_AUDIENCE_TOKEN>",
@@ -18,11 +17,11 @@ INVALID_TOKENS: Dict[str, str] = {
 }
 
 @pytest.fixture
-def headers() -> Dict[str, str]:
+def headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {VALID_TOKEN}", "Content-Type": "application/json"}
 
 @pytest.mark.asyncio
-async def test_health_check_and_summary(headers: Dict[str, str]) -> None:
+async def test_health_check_and_summary(headers: dict[str, str]) -> None:
     """INT-02: Kiểm tra health_check và linux://system/summary"""
     async with httpx.AsyncClient(verify=False) as client:
         # Giả định endpoint health và summary
@@ -38,7 +37,7 @@ async def test_health_check_and_summary(headers: Dict[str, str]) -> None:
         assert "os" in summary_res.json()
 
 @pytest.mark.asyncio
-async def test_mcp_tools_invocation(headers: Dict[str, str]) -> None:
+async def test_mcp_tools_invocation(headers: dict[str, str]) -> None:
     """INT-01 & INT-02: Test gọi 4 tools cơ bản qua Streamable HTTP"""
     tools = ["read_log", "get_status", "list_services", "system_metrics"]
     async with httpx.AsyncClient(verify=False) as client:
