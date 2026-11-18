@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+import io
+import json
+from types import SimpleNamespace
+from typing import Any
+from urllib.error import URLError
+
+import pytest
+
+from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
 from linux_mcp_agent.auth_claims import validate_introspection_payload
+from linux_mcp_agent.config import Settings
 
 
 def valid_payload() -> dict[str, object]:
@@ -15,7 +25,7 @@ def valid_payload() -> dict[str, object]:
     }
 
 
-def validate(payload: dict[str, object]):
+def validate(payload: dict[str, object]) -> dict[str, Any] | None:
     return validate_introspection_payload(
         payload,
         issuer="https://auth.home.arpa/realms/linux-agent",
@@ -30,6 +40,13 @@ def test_accepts_active_token_with_exact_issuer_audience_and_scope() -> None:
     assert result is not None
     assert result["client_id"] == "linux-mcp-agent-client"
     assert "mcp.read" in result["scopes"]
+
+
+def test_accepts_string_audience_claim() -> None:
+    payload = valid_payload()
+    payload["aud"] = "https://mcp.home.arpa/mcp"
+    result = validate(payload)
+    assert result is not None
 
 
 def test_rejects_inactive_token() -> None:
@@ -58,7 +75,248 @@ def test_rejects_expired_or_missing_expiry() -> None:
     assert validate(payload) is None
 
 
+def test_rejects_future_not_before() -> None:
+    payload = valid_payload()
+    payload["nbf"] = 1_900_000_001
+    assert validate(payload) is None
+
+
 def test_rejects_missing_required_scope() -> None:
     payload = valid_payload()
     payload["scope"] = "mcp.logs.read"
+    assert validate(payload) is None
+
+
+def test_rejects_missing_client_id() -> None:
+    payload = valid_payload()
+    payload["client_id"] = ""
+    assert validate(payload) is None
+
+
+@pytest.mark.asyncio
+async def test_keycloak_introspection_verifier_accepts_valid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    settings = Settings.from_env()
+
+    payload = valid_payload()
+    payload["exp"] = 9_999_999_999
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self) -> FakeResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.close()
+
+    class FakeOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> FakeResponse:
+            assert timeout == 2.0
+            return FakeResponse(json.dumps(payload).encode("utf-8"))
+
+    def fake_build_opener(*_args: object) -> FakeOpener:
+        return FakeOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", fake_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+    token = await verifier.verify_token("opaque-or-jwt-token")
+    assert token is not None
+    assert token.client_id == "linux-mcp-agent-client"
+    assert token.resource == "https://mcp.home.arpa/mcp"
+    assert "mcp.read" in token.scopes
+    assert "mcp.logs.read" in token.scopes
+
+
+@pytest.mark.asyncio
+async def test_keycloak_introspection_verifier_caches_tokens_in_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30.0")
+    settings = Settings.from_env()
+
+    payload = valid_payload()
+    payload["exp"] = 9_999_999_999
+
+    calls = 0
+
+    class CountingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    def counting_build_opener(*_args: object) -> CountingOpener:
+        return CountingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", counting_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+
+    token1 = await verifier.verify_token("cached-token")
+    assert token1 is not None
+    assert calls == 1
+
+    token2 = await verifier.verify_token("cached-token")
+    assert token2 is not None
+    assert calls == 1
+    assert token2.client_id == token1.client_id
+    assert token2.resource == "https://mcp.home.arpa/mcp"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_lifetime, cache_lifetime", [(120, 30), (5, 5)])
+async def test_introspection_cache_expires_at_ttl_or_token_expiry(
+    monkeypatch: pytest.MonkeyPatch, token_lifetime: int, cache_lifetime: int,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30")
+    elapsed = 0.0
+    epoch = 1_900_000_000
+    clock = SimpleNamespace(time=lambda: epoch + elapsed, monotonic=lambda: 100.0 + elapsed)
+    monkeypatch.setattr("linux_mcp_agent.auth.time", clock)
+    monkeypatch.setattr("linux_mcp_agent.auth_claims.time", clock)
+    payload = valid_payload()
+    payload["exp"] = epoch + token_lifetime
+    calls = 0
+
+    class CountingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    def counting_build_opener(*_args: object) -> CountingOpener:
+        return CountingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", counting_build_opener)
+    verifier = KeycloakIntrospectionVerifier(Settings.from_env())
+    assert await verifier.verify_token("expiring-token") is not None
+    assert calls == 1
+
+    elapsed = cache_lifetime - 0.01
+    assert await verifier.verify_token("expiring-token") is not None
+    assert calls == 1
+
+    # Revocation must be observed on the next introspection after the TTL.
+    # For a short-lived token, leave the response active to prove exp is enforced.
+    if token_lifetime > cache_lifetime:
+        payload["active"] = False
+    elapsed = float(cache_lifetime)
+    assert await verifier.verify_token("expiring-token") is None
+    assert calls == 2
+    elapsed += 1.0
+    assert await verifier.verify_token("expiring-token") is None
+    assert calls == 3
+
+
+@pytest.mark.asyncio
+async def test_keycloak_introspection_verifier_bypasses_cache_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "0")
+    settings = Settings.from_env()
+
+    payload = valid_payload()
+    payload["exp"] = 9_999_999_999
+
+    calls = 0
+
+    class CountingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    def counting_build_opener(*_args: object) -> CountingOpener:
+        return CountingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", counting_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+
+    await verifier.verify_token("no-cache-token")
+    assert calls == 1
+    await verifier.verify_token("no-cache-token")
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_keycloak_introspection_verifier_fails_closed_on_network_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    settings = Settings.from_env()
+
+    class FailingOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> object:
+            raise URLError("connection refused")
+
+    def failing_build_opener(*_args: object) -> FailingOpener:
+        return FailingOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", failing_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+    assert await verifier.verify_token("any-token") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_token", ["", "has space", "line\nbreak", "x" * 8193, "é", "token\x7f"])
+async def test_keycloak_introspection_verifier_rejects_malformed_tokens_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+    bad_token: str,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "linux-mcp-resource-server")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-secret")
+    settings = Settings.from_env()
+    called = False
+
+    class UnreachableOpener:
+        def open(self, _request: object, timeout: float = 2.0) -> object:
+            nonlocal called
+            called = True
+            raise AssertionError("Network should not be called for malformed token")
+
+    def unreachable_build_opener(*_args: object) -> UnreachableOpener:
+        return UnreachableOpener()
+
+    monkeypatch.setattr("linux_mcp_agent.auth.build_opener", unreachable_build_opener)
+    verifier = KeycloakIntrospectionVerifier(settings)
+    assert await verifier.verify_token(bad_token) is None
+    assert called is False
+
+
+def test_keycloak_realm_template_has_expected_clients_scopes_and_placeholders() -> None:
+    from pathlib import Path
+
+    realm_path = Path("deploy/keycloak/realm-linux-agent.example.json")
+    realm_data = json.loads(realm_path.read_text(encoding="utf-8"))
+    assert realm_data["realm"] == "linux-agent"
+    scopes = {scope["name"] for scope in realm_data["clientScopes"]}
+    assert {"mcp.read", "mcp.logs.read"} <= scopes
+    clients = {client["clientId"]: client for client in realm_data["clients"]}
+    assert (
+        clients["linux-mcp-resource-server"]["attributes"]["resource_url"]
+        == "https://mcp.home.arpa/mcp"
+    )
+    assert str(clients["linux-mcp-resource-server"]["secret"]).startswith("CHANGE_ME_")
+    assert str(clients["linux-mcp-agent-client"]["secret"]).startswith("CHANGE_ME_")
+
+
+@pytest.mark.parametrize("claim", ["exp", "nbf"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "invalid"])
+def test_rejects_invalid_time_claims(claim: str, value: object) -> None:
+    payload = valid_payload()
+    payload[claim] = value
     assert validate(payload) is None
