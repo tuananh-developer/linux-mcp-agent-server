@@ -41,6 +41,10 @@ uv run linux-mcp-agent
 
 The development environment defaults to `AUTH_MODE=disabled` and loopback binding. It is for same-host development only. Do not expose this mode to a LAN or public network.
 
+## Project requirements and traceability
+
+The SRS is the canonical requirements baseline. The full FR/NFR mapping from implementation and automated tests to live acceptance evidence is in [docs/11_requirements_traceability.md](docs/11_requirements_traceability.md).
+
 ## Quality checks
 
 ```bash

@@ -2,7 +2,15 @@
 
 **Shared integration base:** `team-handoff` · **Team size:** 3
 
-This document defines the three workstreams and their ownership boundaries. The `integration/finalize-ubuntu2404` candidate combines the Technical Lead scope with the Security & Infrastructure implementation. Workstream 3 still owns independent integration, deployment and performance acceptance on the target Ubuntu host. Keep feature changes PR-based; do not merge to `main` until all acceptance gates have recorded evidence.
+This document defines the three workstreams and their ownership boundaries. The `integration/finalize-ubuntu2404` candidate combines the Technical Lead scope with the Security & Infrastructure implementation. Workstream 3 owns independent integration, deployment and performance acceptance on the target Ubuntu host. Keep feature changes PR-based; do not merge to `main` until all acceptance gates have recorded evidence.
+
+## Current workstream status — 2026-11-18
+
+- **WS1:** the architecture, SRS, charter, OOAD, MCP contract, core telemetry, ADRs, integration candidate and FR/NFR traceability are maintained on `integration/finalize-ubuntu2404`. Fresh CI on the synchronized candidate and PR review remain required before calling the integration candidate ready.
+- **WS2:** security/infrastructure code is complete and integrated through PRs #4, #13 and #15 on `team-handoff`. This is a code-completion statement only; it does not claim that the Ubuntu deployment or host-level checks have passed.
+- **WS3:** automated security/acceptance scaffolding is present. Live OAuth, HTTPS/LAN, systemd, PostgreSQL persistence and four-tool performance evidence remain outstanding until recorded under `reports/acceptance/`.
+
+The detailed status and evidence mapping is maintained in [docs/11_requirements_traceability.md](11_requirements_traceability.md).
 
 ## Workstream 1 — Technical Leadership, Architecture and MCP Core
 
@@ -90,7 +98,7 @@ The implementation landed in Workstream 2's PR #4 and is included in the `integr
 
 ### Implementation ownership and final verification
 
-1. Maintain the validated production/security settings in `config.py`, including the requirement that the MCP audience exactly matches the resource URI.
+1. Maintain the validated production/security settings in `config.py`, including normalized equality between the MCP audience and resource URI (trailing slashes are removed before comparison), plus the bounded introspection-cache TTL.
 2. Own `src/linux_mcp_agent/auth_claims.py`: keep active state, issuer, finite expiry, not-before, exact audience/resource and scopes fail-closed.
 3. Own `src/linux_mcp_agent/auth.py` and verify the official MCP SDK token-verifier integration with the configured Keycloak realm.
 4. Maintain verifier wiring in `server.py`; keep the backend bound to loopback and protect the auth/session lifecycle.
@@ -117,7 +125,7 @@ The implementation landed in Workstream 2's PR #4 and is included in the `integr
 
 **Owner:** member 3.
 
-Keep the core unit tests, in-process MCP contract test and the real TCP/Streamable HTTP integration test in the integration candidate. Add independent security, deployment and performance evidence on the acceptance host; do not remove tests merely to get a green build.
+Keep the core unit tests, in-process MCP contract test and the real TCP/Streamable HTTP integration test in the integration candidate. Maintain the independent security suite and acceptance matrix, then add deployment and performance evidence on the acceptance host; do not remove tests merely to get a green build.
 
 ### Required implementation
 

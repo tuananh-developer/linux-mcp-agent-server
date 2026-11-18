@@ -11,7 +11,7 @@
 
 The canonical protected resource is `https://mcp.home.arpa/mcp`.
 
-`MCP_RESOURCE_URI` and `MCP_REQUIRED_AUDIENCE` must be identical. Configuration rejects a mismatch because the MCP SDK resource binding and the introspected token audience must refer to the same resource. The external MCP Client requests this resource from Keycloak and sends the resulting bearer access token to the MCP endpoint.
+`MCP_RESOURCE_URI` and `MCP_REQUIRED_AUDIENCE` are normalized by removing trailing slashes and must then be identical. Configuration rejects a mismatch because the MCP SDK resource binding and the introspected token audience must refer to the same resource. The external MCP Client requests this resource from Keycloak and sends the resulting bearer access token to the MCP endpoint.
 
 The Keycloak realm template includes:
 - Realm `linux-agent`.
@@ -39,6 +39,18 @@ The template contains placeholder secrets only. Replace them using a secure secr
 6. `read_allowed_log` independently checks for `mcp.logs.read` before it runs journalctl. Missing permission never invokes the journal reader.
 
 Introspection responses and journal content are treated as untrusted input. Tokens, client secrets and raw authorization headers must not be written to application logs.
+
+## Introspection cache and revocation
+
+The verifier caches only successful token introspection results in process memory. Cache keys are SHA-256 digests of the token, not the raw token. The cache is bounded to 1,024 entries.
+
+- `MCP_INTROSPECTION_CACHE_TTL_SECONDS` defaults to 30 seconds and accepts values from 0 to 300 seconds.
+- Each entry expires at the earlier of the configured cache TTL or the token's `exp` time.
+- Failed or inactive introspection responses are not cached.
+- Token revocation or a scope change in Keycloak is not pushed into the MCP process. A previously accepted token can remain authorized until its cache entry expires, for at most the configured TTL and never beyond the token expiry.
+- Set the TTL to `0` to disable caching and introspect every request. This reduces the revocation delay but increases Keycloak traffic and makes each request dependent on Keycloak availability.
+
+The TTL is a security/availability trade-off and must be selected explicitly for the target deployment. The default limits the stale-authorization window to 30 seconds.
 
 ## TLS and LAN ingress
 

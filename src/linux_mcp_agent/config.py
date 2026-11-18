@@ -61,6 +61,7 @@ class Settings:
     journalctl_timeout_seconds: float
     max_log_output_bytes: int
     log_level: str
+    introspection_cache_ttl_seconds: float = 30.0
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -76,9 +77,10 @@ class Settings:
             port = int(os.getenv("MCP_PORT", "3000"))
             timeout = float(os.getenv("JOURNALCTL_TIMEOUT_SECONDS", "1.5"))
             max_bytes = int(os.getenv("MAX_LOG_OUTPUT_BYTES", "65536"))
+            cache_ttl = float(os.getenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30.0"))
         except ValueError as exc:
             raise ConfigurationError(
-                "MCP_PORT, JOURNALCTL_TIMEOUT_SECONDS and MAX_LOG_OUTPUT_BYTES must be numeric"
+                "MCP_PORT, JOURNALCTL_TIMEOUT_SECONDS, MAX_LOG_OUTPUT_BYTES and MCP_INTROSPECTION_CACHE_TTL_SECONDS must be numeric"
             ) from exc
         if not 1 <= port <= 65535:
             raise ConfigurationError("MCP_PORT must be between 1 and 65535")
@@ -86,6 +88,8 @@ class Settings:
             raise ConfigurationError("JOURNALCTL_TIMEOUT_SECONDS must be between 0.1 and 5")
         if not 1024 <= max_bytes <= 262144:
             raise ConfigurationError("MAX_LOG_OUTPUT_BYTES must be between 1024 and 262144")
+        if not 0.0 <= cache_ttl <= 300.0:
+            raise ConfigurationError("MCP_INTROSPECTION_CACHE_TTL_SECONDS must be between 0 and 300")
 
         public_url = _require_https_url(
             "MCP_PUBLIC_URL", os.getenv("MCP_PUBLIC_URL", "https://mcp.home.arpa/mcp")
@@ -109,7 +113,7 @@ class Settings:
         )
         if audience != resource_uri:
             raise ConfigurationError(
-                "MCP_REQUIRED_AUDIENCE must exactly match MCP_RESOURCE_URI"
+                "MCP_REQUIRED_AUDIENCE must equal MCP_RESOURCE_URI after normalization"
             )
         allowed_disks = _csv(os.getenv("ALLOWED_DISK_PATHS"), ("/",))
         if not allowed_disks or any(
@@ -160,6 +164,7 @@ class Settings:
             journalctl_timeout_seconds=timeout,
             max_log_output_bytes=max_bytes,
             log_level=log_level,
+            introspection_cache_ttl_seconds=cache_ttl,
         )
         if auth_mode == "keycloak":
             if not settings.introspection_client_id or not settings.introspection_client_secret:

@@ -31,7 +31,7 @@ Deliver a secure, read-only Linux observability MCP server that exposes selected
 
 ## Canonical requirements
 
-The Software Requirements Specification (`docs/01_software_requirements_specification.md`) is the single source of truth for requirement identifiers and normative wording. Other documents must reference these IDs rather than define competing copies.
+The Software Requirements Specification (`docs/01_software_requirements_specification.md`) is the single source of truth for requirement identifiers and normative wording. Other documents must reference these IDs rather than define competing copies. The module/test/live-evidence mapping is maintained in [docs/11_requirements_traceability.md](11_requirements_traceability.md).
 
 | Requirement group | Canonical IDs | Primary implementation |
 |---|---|---|

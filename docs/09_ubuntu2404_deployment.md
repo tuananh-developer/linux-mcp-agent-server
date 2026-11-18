@@ -62,7 +62,7 @@ Configure:
 - Optional journal scope: `mcp.logs.read`.
 - Canonical resource/audience: `https://mcp.home.arpa/mcp`.
 
-Confirm the actual token and introspection payload contain the expected issuer, audience, client ID, expiration and scopes. Do not bypass the audience validation if the Keycloak mapper or resource indicator is incorrect.
+Confirm the actual token and introspection payload contain the expected issuer, audience, client ID, expiration and scopes. Choose the introspection-cache TTL according to the acceptable revocation delay (no more than 300 seconds); document the selected value. Do not bypass the audience validation if the Keycloak mapper or resource indicator is incorrect.
 
 ## 4. Install and configure the native MCP service
 
@@ -72,7 +72,8 @@ Set at least:
 - `APP_ENV=production`
 - `AUTH_MODE=keycloak`
 - Exact MCP/Keycloak hostname and resource URLs
-- `MCP_REQUIRED_AUDIENCE` equal to `MCP_RESOURCE_URI`
+- `MCP_REQUIRED_AUDIENCE` equal to `MCP_RESOURCE_URI` after trailing-slash normalization
+- `MCP_INTROSPECTION_CACHE_TTL_SECONDS` (default `30`, range `0`–`300`; set `0` to disable successful-introspection caching)
 - Resource-server client ID and secret
 - Allowed disk paths and log-source aliases
 

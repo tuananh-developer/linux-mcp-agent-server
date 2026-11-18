@@ -4,7 +4,7 @@
 
 ## Locked project baseline
 
-- Runtime: Python 3.15.2; CI checks Python 3.14.10 and 3.15.2.
+- Runtime: Python 3.15.2; CI checks the Python 3.14 and 3.15 release lines (uv resolves the available patch release; the latest observed CI runtimes were 3.14.10 and 3.15.2).
 - MCP: official Python SDK 2.3.0; deployed transport is Streamable HTTP.
 - Linux acceptance target: Ubuntu 24.04 LTS x86_64.
 - Application endpoint: `/mcp`, backend bound to `127.0.0.1:3000`.
@@ -28,6 +28,7 @@ The `integration/finalize-ubuntu2404` branch brings together:
 - Unit tests, in-process MCP contract coverage and an actual Streamable HTTP client test over TCP.
 - A benchmark runner that emits per-tool latency distributions and host metadata.
 - Technical Lead responsibilities, updated architecture/design documentation and acceptance gates.
+- A requirement-by-requirement FR/NFR traceability matrix: [docs/11_requirements_traceability.md](11_requirements_traceability.md).
 
 The branch also includes fixes for PostgreSQL 18 volume layout, Keycloak readiness checks, audience/resource configuration consistency, malformed token timestamps, invalid journal timestamps and measured process sampling duration.
 
