@@ -94,7 +94,7 @@ Own the system-level technical direction and the stable MCP Core. Keep requireme
 
 **Owner:** member 2.
 
-The implementation landed in Workstream 2's PR #4 and is included in the `integration/finalize-ubuntu2404` candidate. Workstream 2 retains ownership of these components: the Technical Lead may review and integrate changes but must not claim the owner's host-level verification without recorded evidence.
+The Security & Infrastructure implementation was delivered through PR #4, followed by auth/CI hardening in PR #13 and resource/audience plus introspection-cache work in PR #15. All three PRs are merged into `team-handoff` and included in this integration candidate. **WS2 code implementation is complete.** Workstream 2 retains operational ownership of these components and must not claim host-level deployment verification without recorded evidence.
 
 ### Implementation ownership and final verification
 

@@ -130,6 +130,9 @@ The project shall not be marked accepted until all acceptance evidence is record
 
 ## 8. Traceability
 
+The detailed requirement-to-module, automated-test and live-acceptance mapping is maintained in [docs/11_requirements_traceability.md](11_requirements_traceability.md). This matrix distinguishes automated coverage from deployment evidence; an unexecuted host check is not marked PASS.
+
+
 The implementation mapping is:
 
 - FR-001, FR-008, FR-009, FR-010: `src/linux_mcp_agent/server.py`.
