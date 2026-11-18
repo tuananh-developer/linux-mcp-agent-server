@@ -79,3 +79,7 @@ The base scope is enforced by the MCP SDK auth settings. The additional log scop
 - Inactive, malformed, expired, wrong-issuer, wrong-audience/resource or insufficient-scope tokens fail closed.
 - Unknown log aliases, invalid line limits, journal timeout, output overflow and journal execution failures return bounded errors or explicitly marked partial results.
 - No tool accepts shell fragments, executable paths, arbitrary filesystem paths or systemd unit names from the caller.
+
+## Browser assistant
+
+`/` and `/dashboard` serve the AI chat interface. The browser initializes an MCP session, discovers tools and executes model-selected calls through `/mcp`. External clients continue to use the same tool, resource and prompt schemas.

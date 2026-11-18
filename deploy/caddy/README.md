@@ -1,16 +1,18 @@
 # Caddy reverse proxy and internal TLS runbook
 
-Caddy (`caddy:2.11.7-alpine`) acts as the sole LAN-facing HTTPS reverse proxy and TLS terminator. Both upstream services (`127.0.0.1:3000` for the MCP server and `127.0.0.1:8080` for Keycloak) remain bound strictly to host loopback.
+Caddy (`caddy:2.11.7-alpine`) acts as the sole LAN-facing HTTPS reverse proxy and TLS terminator. Both upstream services (`127.0.0.1:3002` for the MCP server and `127.0.0.1:8080` for Keycloak) remain bound strictly to host loopback.
 
 ## Route allowlist
 
 `deploy/caddy/Caddyfile` terminates HTTPS with `tls internal` for two hostnames configured via environment variables (`MCP_DOMAIN` and `AUTH_DOMAIN`):
 
 1. **`{$MCP_DOMAIN}` (`mcp.home.arpa`)**:
-   - Allowed paths forwarded to `127.0.0.1:3000`:
+   - Allowed paths forwarded to `127.0.0.1:3002`:
+     - `/` and `/dashboard` (public dashboard shell)
+     - `/dashboard/assets/app.js`, `/dashboard/assets/app.css`, `/dashboard/assets/mcp-client.mjs` (static assets)
      - `/mcp`
      - `/.well-known/oauth-protected-resource/mcp`
-   - All other paths return `404` (note that `/healthz` remains loopback-only on `127.0.0.1:3000/healthz` and is not exposed to the LAN).
+   - All other paths return `404` (note that `/healthz` remains loopback-only on `127.0.0.1:3002/healthz` and is not exposed to the LAN).
 
 2. **`{$AUTH_DOMAIN}` (`auth.home.arpa`)**:
    - Allowed LAN-facing OIDC paths forwarded to `127.0.0.1:8080`:
@@ -40,7 +42,7 @@ sudo update-ca-certificates
 
 ## Host firewall (UFW) rules
 
-Restrict inbound TCP 443 at the Ubuntu host firewall to the designated LAN client IP or demo subnet only, and ensure ports `3000`, `8080`, and `5432` are never opened:
+Restrict inbound TCP 443 at the Ubuntu host firewall to the designated LAN client IP or demo subnet only, and ensure ports `3002`, `8080`, and `5432` are never opened:
 
 ```bash
 sudo ufw default deny incoming
@@ -66,3 +68,7 @@ curl --cacert ./caddy-local-root.crt -fsS https://auth.home.arpa/realms/linux-ag
 # Admin console from a non-loopback LAN client must return HTTP 404:
 curl --cacert ./caddy-local-root.crt -i https://auth.home.arpa/admin/
 ```
+
+Dashboard assets contain no telemetry or credentials. Browser data requests use the protected `/mcp` route with Bearer authorization; the dashboard does not introduce an alternative data API.
+
+The AI gateway routes `/agent/status` and `/agent/chat` are also proxied. They enforce Host/Origin and MCP base-scope authorization independently. In OpenAI mode the gateway forwards approved chat/tool context to the fixed OpenAI HTTPS endpoint using a backend-only key; Linux tool execution remains on `/mcp`.

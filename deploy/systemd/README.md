@@ -1,6 +1,6 @@
 # systemd deployment
 
-The MCP process is native on the Ubuntu host, runs as the dedicated non-root user `linux-mcp-agent`, and binds only to `127.0.0.1:3000`. The unit deliberately grants no root privileges.
+The MCP process is native on the Ubuntu host, runs as the dedicated non-root user `linux-mcp-agent`, and binds only to `127.0.0.1:3002`. The unit deliberately grants no root privileges.
 
 ## Journal access design and residual privilege
 
@@ -38,7 +38,7 @@ sudo uv sync --locked --no-dev
 sudo systemctl daemon-reload
 sudo systemctl enable --now linux-mcp-agent
 sudo systemctl status linux-mcp-agent
-curl -fsS http://127.0.0.1:3000/healthz
+curl -fsS http://127.0.0.1:3002/healthz
 ```
 
 The project pins direct dependencies in `pyproject.toml`. Generate and commit `uv.lock` with `uv lock` on a network-connected development machine before using `uv sync --locked` in a clean deployment.
@@ -56,7 +56,7 @@ The project pins direct dependencies in `pyproject.toml`. Generate and commit `u
    sudo install -o root -g root -m 0644 deploy/systemd/linux-mcp-agent.service /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl restart linux-mcp-agent
-   curl -fsS http://127.0.0.1:3000/healthz
+   curl -fsS http://127.0.0.1:3002/healthz
    ```
 
 ### Rollback
@@ -68,5 +68,5 @@ sudo uv sync --locked --no-dev
 sudo install -o root -g root -m 0644 deploy/systemd/linux-mcp-agent.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl restart linux-mcp-agent
-curl -fsS http://127.0.0.1:3000/healthz
+curl -fsS http://127.0.0.1:3002/healthz
 ```

@@ -8,6 +8,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Literal
+from urllib.parse import urlsplit
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
@@ -20,8 +21,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
+from linux_mcp_agent.agent import agent_routes
 from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
 from linux_mcp_agent.config import Settings
+from linux_mcp_agent.dashboard import dashboard_routes
 from linux_mcp_agent.log_reader import load_log_sources, read_allowed_log
 from linux_mcp_agent.system import (
     get_disk_usage,
@@ -122,9 +125,15 @@ async def _healthz(_: Request) -> JSONResponse:
 
 def build_asgi_app(settings: Settings) -> Starlette:
     mcp = build_mcp_server(settings)
+    public = urlsplit(settings.public_url)
+    dashboard_origins = (
+        f"http://127.0.0.1:{settings.port}",
+        f"http://localhost:{settings.port}",
+        f"{public.scheme}://{public.netloc}",
+    )
     transport_security = TransportSecuritySettings(
         allowed_hosts=list(settings.allowed_hosts),
-        allowed_origins=list(settings.allowed_origins),
+        allowed_origins=list(dict.fromkeys((*settings.allowed_origins, *dashboard_origins))),
     )
     mcp_app = mcp.streamable_http_app(transport_security=transport_security)
 
@@ -137,6 +146,11 @@ def build_asgi_app(settings: Settings) -> Starlette:
 
     # Keep health checks outside the MCP bearer-auth sub-application and before Mount("/").
     return Starlette(
-        routes=[Route("/healthz", _healthz, methods=["GET"]), Mount("/", app=mcp_app)],
+        routes=[
+            Route("/healthz", _healthz, methods=["GET"]),
+            *dashboard_routes(),
+            *agent_routes(settings, mcp, transport_security),
+            Mount("/", app=mcp_app),
+        ],
         lifespan=lifespan,
     )

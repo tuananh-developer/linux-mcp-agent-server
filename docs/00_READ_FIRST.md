@@ -1,13 +1,13 @@
 # Read this first
 
-**Linux MCP Agent Server** is a read-only Linux observability MCP server. It does not host an LLM or implement an Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection, credentials and provider fallback.
+**Linux MCP Agent Server** is a read-only Linux observability MCP server. Clients can connect to MCP directly, or use the browser assistant at `http://localhost:3002/`. See [the README](../README.md) for model configuration and data handling.
 
 ## Locked project baseline
 
 - Runtime: Python 3.15.2; CI checks the Python 3.14 and 3.15 release lines (uv resolves the available patch release; the latest observed CI runtimes were 3.14.10 and 3.15.2).
 - MCP: official Python SDK 2.3.0; deployed transport is Streamable HTTP.
 - Linux acceptance target: Ubuntu 24.04 LTS x86_64.
-- Application endpoint: `/mcp`, backend bound to `127.0.0.1:3000`.
+- Application endpoint: `/mcp`, backend bound to `127.0.0.1:3002`.
 - LAN edge: Caddy 2.11.7 with internal TLS.
 - Authorization server: Keycloak 26.8.1.
 - Database: PostgreSQL 18.6 for Keycloak persistence only; no application database.

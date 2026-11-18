@@ -14,7 +14,7 @@ This document defines the functional and non-functional requirements for a read-
 
 ### 1.2 Product scope
 
-The product is a Python MCP Server using the official MCP Python SDK. It reads selected Linux telemetry and journald entries, applies server-side allowlists and authorization, and returns structured MCP results. It does not host an LLM or implement an Agent runtime.
+The product is a Python MCP Server using the official MCP Python SDK. It reads selected Linux telemetry and journald entries, applies server-side allowlists and authorization, and returns structured MCP results. The optional browser agent integrates the tools with a configured OpenAI API or optional local Ollama model.
 
 ### 1.3 Definitions
 
@@ -52,7 +52,7 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 - Client input must not become a shell command, executable path, filesystem path or systemd unit.
 - Disk paths and log aliases are administrator-controlled.
 - Journal output and other tool results are untrusted data.
-- LLM inference, provider credentials and fallback policy remain outside this repository.
+- LLM inference runs through the configured OpenAI API or optional local Ollama; the application provides a bounded agent client and local model gateway.
 
 ### 2.5 Assumptions and dependencies
 
@@ -76,6 +76,7 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 | FR-009 | The server shall expose a `health_check` prompt with a constrained focus argument. |
 | FR-010 | The server shall expose `/healthz` as a separate operational health endpoint. |
 | FR-011 | The server shall require the configured base scope for MCP access and the additional log scope before reading journald. |
+| FR-013 | The optional AI Assistant shall use model-directed MCP tool calls to answer Linux questions and show observations, failures and bounded execution traces. |
 | FR-012 | The server shall return structured, bounded results and safe errors without exposing tokens, client secrets, process command lines or process environment values. |
 
 ## 4. External interface requirements
@@ -111,7 +112,7 @@ The application shall read host metrics through supported Linux interfaces and p
 
 - Process results shall not include command-line arguments, environment variables or usernames.
 - The system summary shall not include tokens, secrets, raw logs or process command lines.
-- The server shall not forward telemetry or journal output to an LLM or external provider.
+- MCP collectors shall not independently forward data to inference providers. The optional agent sends chat and selected tool results to the configured model provider; journal results require explicit user consent.
 - Application logs shall not contain bearer tokens or client secrets.
 
 ## 7. Verification and acceptance
@@ -141,3 +142,7 @@ The implementation mapping is:
 - FR-011: `src/linux_mcp_agent/auth.py`, `src/linux_mcp_agent/auth_claims.py` and the log-scope check in `server.py`.
 - Runtime constraints: `src/linux_mcp_agent/config.py`.
 - Automated tests: `tests/`; deployment evidence is collected on the Ubuntu acceptance host.
+
+## Course topic 15 agent acceptance
+
+Real AI-agent integration and interaction with Linux services are required by the course. Demonstrate the scenarios in `06_llm_agent_integration.md` and record evidence. The read-only boundary, chosen infrastructure products and performance thresholds are team design decisions, not requirements inferred from the topic title.

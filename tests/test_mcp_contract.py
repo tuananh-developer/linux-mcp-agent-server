@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from mcp import Client
 from mcp.server.auth.provider import AccessToken
+from starlette.routing import Mount, Route
 
 from linux_mcp_agent.config import Settings
 from linux_mcp_agent.server import build_asgi_app, build_mcp_server
@@ -140,4 +141,6 @@ async def test_mounted_asgi_app_starts_and_stops_mcp_session_manager(
     app = build_asgi_app(settings)
 
     async with app.router.lifespan_context(app):
-        assert len(app.routes) == 2
+        assert {route.path for route in app.routes if isinstance(route, (Route, Mount))} >= {
+            "/healthz", "/", "/dashboard",
+        }
