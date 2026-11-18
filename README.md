@@ -86,3 +86,20 @@ The LAN profile requires `AUTH_MODE=keycloak`, trusted Caddy internal CA, a conf
 Keycloak 26.8.1 labels Resource Indicators experimental for the newest MCP protocol revision. The server fails closed unless the token has the exact configured MCP audience/resource. Do not disable audience validation to work around an integration problem. Keep LAN exposure closed until a real integration test confirms `resource` -> `aud`, introspection claims, required scopes and cross-device TLS trust.
 
 The `systemd-journal` supplementary group enables journal access but is broader than the MCP alias list; this residual privilege is documented and must be reviewed during deployment.
+
+## Live demo
+
+To start the local Keycloak/PostgreSQL/Caddy stack and ensure the MCP service is running, use:
+
+```bash
+bash scripts/start-demo.sh
+```
+
+In a second terminal, run the real Keycloak-authenticated MCP acceptance client:
+
+```bash
+uv run python scripts/demo_live.py
+```
+
+It discovers and calls all four tools, reads `linux://system/summary`, and retrieves the `health_check` prompt. See [docs/10_live_demo.md](docs/10_live_demo.md) for one-time credential setup and TLS trust notes. The client keeps the access token in memory and never prints or saves credentials.
+
