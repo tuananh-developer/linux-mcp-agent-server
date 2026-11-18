@@ -2,79 +2,67 @@
 
 ## Objective
 
-Build and configure a secure, read-only Linux MCP server that exposes system observability tools to an external Agent/MCP Client through the Model Context Protocol.
+Deliver a secure, read-only Linux observability MCP server that exposes selected host information to an external Agent/MCP Client through the Model Context Protocol.
+
+## System boundary
+
+- **External Agent/MCP Client:** owns model selection, inference, tool choice, conversation history and provider fallback.
+- **MCP application:** owns protocol handling, input validation, OAuth resource-server enforcement and read-only telemetry collection.
+- **Keycloak:** owns identity and access-token issuance; the MCP application introspects tokens and does not issue them.
+- **Caddy:** owns LAN-facing TLS termination and reverse-proxy route allowlisting.
+- **PostgreSQL:** stores Keycloak identity/configuration data only. It is not an application database and is not used to persist host metrics.
 
 ## In scope
 
-- Official MCP Python SDK v2, Streamable HTTP endpoint at `/mcp`.
-- Linux CPU/RAM, allowlisted filesystem usage, bounded process list, allowlisted real systemd journal access.
+- Official MCP Python SDK 2.x and Streamable HTTP at `/mcp`.
 - Four MCP Tools, one MCP Resource and one MCP Prompt.
-- OAuth2/OIDC resource-server validation using Keycloak, exact issuer and resource/audience binding, and least-privilege scopes.
-- Caddy HTTPS reverse proxy, PostgreSQL for Keycloak only, Docker Compose for infrastructure, and native systemd service for the MCP process.
-- Unit, protocol-contract, integration, security and performance test plans.
-- Ubuntu 24.04 LTS x86_64 as the primary acceptance environment; group of three.
+- Linux CPU, memory, load, uptime, allowlisted disk capacity, bounded process information and allowlisted journald entries.
+- Keycloak OAuth2/OIDC resource-server validation with exact issuer, expiry, resource/audience and least-privilege scopes.
+- Caddy internal TLS, PostgreSQL for Keycloak persistence, Docker Compose for supporting infrastructure, and a native systemd service for the MCP application.
+- Unit, MCP contract, actual HTTP integration, security, deployment and performance verification.
+- Ubuntu 24.04 LTS x86_64 as the primary acceptance environment.
 
 ## Out of scope
 
-- LLM hosting, model inference, LangChain orchestration and provider fallback inside this repository.
-- Arbitrary command execution, file writes/deletes, killing processes, or restarting services.
-- Public multi-tenant service, dashboard, application database, or cloud deployment.
-- Claiming distribution portability without tests.
+- LLM hosting, model inference, Agent orchestration and provider fallback inside this repository.
+- Arbitrary shell execution, arbitrary path access, file writes/deletes, process termination or service restart.
+- A user-facing dashboard, application database, public multi-tenant service or cloud deployment.
+- Claims of distribution portability without platform-specific tests.
 
-## Functional requirements
+## Canonical requirements
 
-Requirement IDs and wording follow `docs/01_software_requirements_specification.md`, the authoritative acceptance baseline.
+The Software Requirements Specification (`docs/01_software_requirements_specification.md`) is the single source of truth for requirement identifiers and normative wording. Other documents must reference these IDs rather than define competing copies. The module/test/live-evidence mapping is maintained in [docs/11_requirements_traceability.md](11_requirements_traceability.md).
 
-| ID | Requirement |
-|---|---|
-| FR-001 | The server shall expose MCP over Streamable HTTP at `/mcp`. |
-| FR-002 | The server shall provide `get_system_metrics`, returning timestamped CPU, logical core count, memory, load average, uptime and status. |
-| FR-003 | The server shall provide `get_disk_usage`, returning capacity metrics only for exact administrator-allowlisted mount points. |
-| FR-004 | The server shall provide `list_processes`, with a limit from 1 to 100, CPU or memory sorting, and an optional bounded name filter. Returned process fields shall be limited to PID, name, CPU%, memory%, RSS bytes and status. |
-| FR-005 | The process reader shall detect process exit or PID reuse between samples and shall not combine measurements from different process identities. |
-| FR-006 | The server shall provide `read_allowed_log`, accepting an alias and a bounded line count only. The alias shall resolve to a configured systemd unit. |
-| FR-007 | Journal reads shall use a fixed server-controlled `journalctl` executable and argument list, disable shell interpretation, enforce time/output limits and redact common secret patterns. |
-| FR-008 | The server shall expose a JSON system summary at `linux://system/summary`. |
-| FR-009 | The server shall expose a `health_check` prompt with a constrained focus argument. |
-| FR-010 | The server shall expose `/healthz` as a separate operational health endpoint. |
-| FR-011 | The server shall require the configured base scope for MCP access and the additional log scope before reading journald. |
-| FR-012 | The server shall return structured, bounded results and safe errors without exposing tokens, client secrets, process command lines or process environment values. |
+| Requirement group | Canonical IDs | Primary implementation |
+|---|---|---|
+| MCP transport, Resource, Prompt and health route | FR-001, FR-008, FR-009, FR-010 | `server.py` |
+| System metrics and disk usage | FR-002, FR-003 | `system.py` |
+| Process listing and PID-reuse protection | FR-004, FR-005 | `system.py` |
+| Journald allowlist, bounded execution and redaction | FR-006, FR-007 | `log_reader.py` |
+| Base scope and log-specific scope | FR-011 | `auth.py`, `auth_claims.py`, `server.py` |
+| Safe structured output and errors | FR-012 | MCP handlers and telemetry/log readers |
+| Security, performance, reliability and deployment | NFR-SEC-001..005, NFR-PRF-001..002, NFR-REL-001, NFR-DEP-001, NFR-MNT-001 | Application, infrastructure and acceptance evidence |
 
-## Non-functional requirements
+## Architecture decisions
 
-| ID | Requirement |
-|---|---|
-| NFR-SEC-001 | The product shall remain read-only and shall not expose arbitrary shell execution, file mutation, process termination or service restart. |
-| NFR-SEC-002 | The application shall bind to loopback; Caddy shall be the only LAN-facing application entry point. |
-| NFR-SEC-003 | Invalid, expired, wrong-issuer, wrong-audience/resource or insufficient-scope access tokens shall fail closed. |
-| NFR-SEC-004 | Secrets shall be supplied through protected runtime configuration and shall not be committed to the repository. |
-| NFR-SEC-005 | Journal output shall be treated as untrusted content and shall be bounded and redacted on a best-effort basis. |
-| NFR-PRF-001 | Each MCP tool shall achieve p95 response time at or below 2 seconds on the designated acceptance host, excluding external LLM inference. |
-| NFR-PRF-002 | Process sampling shall be bounded to at most 1 second; journal reads shall enforce configured time and byte limits. |
-| NFR-REL-001 | Ruff, strict Pyright and pytest shall pass in CI for every supported Python matrix entry. |
-| NFR-DEP-001 | The primary acceptance deployment shall use Ubuntu 24.04 LTS x86_64 and a dedicated non-root systemd account. |
-| NFR-MNT-001 | Runtime configuration shall be environment-driven and documented; production mode shall require authenticated access. |
-
-## System boundary and responsibilities
-
-- The external Agent/MCP Client owns model selection, inference, tool choice, conversation history and provider fallback.
-- The MCP Server owns MCP protocol handling, authorization enforcement, input validation and read-only Linux data collection.
-- Keycloak owns token issuance; the MCP Server acts only as a resource server.
-- Caddy owns LAN TLS termination and route exposure.
-- PostgreSQL stores Keycloak data only; it is not an application database.
+- Python and the official MCP SDK are retained; a language rewrite is not part of this release.
+- MCP is the application protocol boundary. The server does not embed an LLM.
+- The MCP service runs natively under systemd and listens only on loopback.
+- Docker Compose runs only the supporting identity/TLS services: PostgreSQL, Keycloak and Caddy.
+- PostgreSQL is exclusively Keycloak persistence; metrics and process snapshots are read from the Linux host and are not persisted by the application.
+- The read-only security boundary takes priority over feature breadth.
 
 ## Acceptance gates
 
-1. Unit tests and quality tools pass on every supported Python matrix entry.
-2. A standards-compliant MCP Client initializes the server and discovers all four tools, the resource and the prompt over Streamable HTTP.
-3. Positive and negative OAuth integration tests prove issuer, expiry, audience/resource, base scope and log-specific scope enforcement.
-4. A second LAN device connects over trusted HTTPS; Caddy and Keycloak administration routes remain restricted.
-5. systemd runs as a dedicated non-root user; journal group access and its residual privilege are explicitly reviewed.
-6. A repeatable benchmark records p95 at or below 2 seconds for each tool on the designated acceptance host.
-7. Deployment evidence, test output and known limitations are recorded before the project is marked accepted.
+1. Ruff, strict Pyright and pytest pass on every supported Python CI matrix entry.
+2. A standards-compliant MCP Client successfully connects over actual Streamable HTTP and discovers/calls all required capabilities.
+3. Positive and negative OAuth checks prove active state, issuer, expiry, audience/resource, base scope and log-specific scope enforcement.
+4. From a second LAN device, a valid client completes an authenticated HTTPS MCP session using a trusted Caddy CA certificate.
+5. PostgreSQL data persists across a controlled container recreation; no database port is exposed to the LAN.
+6. MCP and Keycloak bind to loopback, and the systemd process runs as a dedicated non-root user with reviewed sandbox and journal privileges.
+7. Per-tool benchmark evidence records p50/p95/p99 and host conditions; p95 target is at or below 2 seconds on the designated Ubuntu 24.04 host, excluding external LLM inference.
+8. Evidence, commands, environment details, failures and limitations are recorded before the project is declared accepted.
 
-## Scope decisions
+## Definition of done
 
-- Linux acceptance target is Ubuntu 24.04 LTS. Fedora may be used for development, but it is not the acceptance environment unless the team and lecturer formally change the baseline.
-- No LLM runtime is embedded in this repository. Agent/model behavior is tested at the external client boundary.
-- The read-only boundary takes priority over feature breadth. Do not add arbitrary command execution to improve the demo.
+A committed implementation or a green CI badge is not sufficient by itself. Each workstream must provide reproducible positive/negative tests and explain known limitations. Live host/network checks must be recorded rather than inferred.

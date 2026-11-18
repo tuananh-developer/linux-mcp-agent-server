@@ -1,67 +1,49 @@
 # Linux MCP Agent Server
 
-A read-only Linux observability MCP server built with Python and the official MCP Python SDK 2.x. The primary acceptance target is **Ubuntu 24.04 LTS x86_64**.
+A read-only Linux observability server that exposes host telemetry through the Model Context Protocol (MCP). The primary deployment and acceptance target is **Ubuntu 24.04 LTS x86_64**.
 
-> **Integration status:** core telemetry, journald, Keycloak introspection and deployment configurations are implemented. Real HTTP/OAuth/TLS/LAN, systemd and performance acceptance evidence is still pending. Keep development mode loopback-only.
+The repository implements an MCP server only. It does not host an LLM or an Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection, conversation history and provider fallback.
 
-## MCP interface contract
+## MCP capabilities
 
-| Primitive | Name | Handoff status |
+| Type | Name | Purpose |
 |---|---|---|
-| Tool | `get_system_metrics` | Implemented in the MCP core |
-| Tool | `get_disk_usage` | Implemented in the MCP core |
-| Tool | `list_processes` | Implemented in the MCP core |
-| Tool | `read_allowed_log` | Implemented; deployment acceptance pending |
-| Resource | `linux://system/summary` | Implemented in the MCP core |
-| Prompt | `health_check` | Implemented in the MCP core |
+| Tool | `get_system_metrics` | Timestamped CPU, memory, load average and uptime |
+| Tool | `get_disk_usage` | Filesystem capacity for administrator-allowlisted mount points |
+| Tool | `list_processes` | Bounded process snapshot without command lines or environment values |
+| Tool | `read_allowed_log` | Bounded, redacted journald entries from configured service aliases |
+| Resource | `linux://system/summary` | High-level JSON host summary |
+| Prompt | `health_check` | Safe, read-only host health-check guidance |
 
-The external Agent/MCP Client owns model selection, inference, tool choice, conversation history and provider fallback. This repository does not host an LLM.
+The server is read-only. It does not expose arbitrary shell execution, arbitrary file reads, process termination, service restart or file mutation.
 
-## Current implementation boundary
+## Architecture
 
-- `system.py` collects read-only CPU, memory, disk and process metrics.
-- `server.py` registers four tools, the summary resource, health prompt and health route.
-- `config.py` validates loopback binding and production authentication settings.
-- `auth.py` and `auth_claims.py` implement Keycloak introspection and claim validation.
-- `log_reader.py` implements alias-only, bounded and redacted journald reads with a separate log scope.
-- `deploy/` contains Compose, Caddy, Keycloak and systemd configurations. Their presence does not prove a successful deployment.
-
-## Architecture and requirements
-
-Start with:
-
-- `docs/00_READ_FIRST.md`
-- `docs/01_software_requirements_specification.md`
-- `docs/02_project_charter_and_scope.md`
-- `docs/03_architecture_and_design.md`
-- `docs/04_ooad_analysis_and_uml.md`
-- `docs/05_mcp_interface_contracts.md`
-- `docs/10_team_workstream_handoff.md`
-
-Security and deployment design references:
-
-- `docs/07_security_threat_model.md`
-- `docs/08_authorization_tls_design.md`
-- `docs/09_ubuntu2404_deployment.md`
-- `deploy/keycloak/README.md`
-- `deploy/caddy/README.md`
-- `deploy/compose/README.md`
-- `deploy/systemd/README.md`
-
-These documents describe requirements and intended acceptance behavior. A member must implement and validate the corresponding infrastructure before it can be considered complete.
+- **MCP application:** Python, official MCP Python SDK 2.3.0, Streamable HTTP at `/mcp`; runs natively under systemd and binds to `127.0.0.1:3000`.
+- **Identity:** Keycloak 26.8.1 issues OAuth access tokens. The MCP application is a resource server and validates tokens using RFC 7662 introspection, exact issuer, expiry, resource/audience and scopes.
+- **TLS ingress:** Caddy 2.11.7 terminates internal TLS and exposes only the approved MCP and OIDC routes to the LAN.
+- **Persistence:** PostgreSQL 18.6 stores Keycloak identity/configuration data only. It is **not an application database**; the MCP telemetry service does not persist metrics.
+- **Containers:** Docker Compose runs PostgreSQL, Keycloak and the optional LAN-facing Caddy service. The MCP process itself is not containerized.
 
 ## Local development
 
-The current app configuration is intentionally loopback-only:
+Use Python 3.15.2 (CI also checks Python 3.14.10) and uv 0.13.8.
 
 ```bash
+uv python install 3.15.2
 uv sync --all-groups
 cp .env.example .env
-set -a; source .env; set +a
-uv run python -m linux_mcp_agent
+set -a
+source .env
+set +a
+uv run linux-mcp-agent
 ```
 
-The server binds to `127.0.0.1:3000` by default. The local mode has no OAuth protection and is for development on the same host only. Never change the bind address to `0.0.0.0` to bypass the missing infrastructure work.
+The development environment defaults to `AUTH_MODE=disabled` and loopback binding. It is for same-host development only. Do not expose this mode to a LAN or public network.
+
+## Project requirements and traceability
+
+The SRS is the canonical requirements baseline. The full FR/NFR mapping from implementation and automated tests to live acceptance evidence is in [docs/11_requirements_traceability.md](docs/11_requirements_traceability.md).
 
 ## Quality checks
 
@@ -71,8 +53,29 @@ uv run pyright
 uv run pytest
 ```
 
-CI runs the quality and test suite on Python 3.14 and 3.15. The existing in-process MCP Client test verifies SDK discovery and core behavior; it does **not** prove deployed Streamable HTTP, OAuth, TLS, LAN reachability or the performance target. Those are explicit member 3 acceptance deliverables.
+The test suite includes unit tests, an in-process MCP SDK contract test and an actual TCP/Streamable HTTP integration test. These automated tests do not replace live Keycloak, TLS trust, second-device LAN, systemd privilege or performance acceptance on Ubuntu 24.04.
 
-## Collaboration
+## Infrastructure deployment
 
-Use `team-handoff` as the shared integration baseline. Create feature branches from it and open PRs back into `team-handoff`; do not push directly to `main` or merge this handoff branch into `main` until all workstreams have passed their acceptance gates.
+Follow [the Ubuntu 24.04 deployment guide](docs/09_ubuntu2404_deployment.md). The intended sequence is PostgreSQL and Keycloak first, then the authenticated native MCP service, and Caddy only after local token validation succeeds.
+
+Keep the firewall restrictive: only the intended HTTPS ingress (TCP 443) should be reachable from the selected demo network. Do not publish PostgreSQL (5432), Keycloak (8080) or MCP (3000) to the LAN.
+
+## Performance benchmark
+
+The benchmark runner uses the official MCP Python Client over Streamable HTTP. It reports p50/p95/p99, success/error counts and host/runtime metadata without recording access tokens or tool output.
+
+```bash
+MCP_BENCHMARK_URL=https://mcp.home.arpa/mcp \
+MCP_BENCHMARK_ACCESS_TOKEN='<read token>' \
+MCP_BENCHMARK_LOG_ALIAS=ssh \
+uv run python scripts/benchmark_mcp.py --iterations 100
+```
+
+Use a valid bearer token from a protected secret source. Set `MCP_BENCHMARK_LOG_ALIAS` only when the token includes `mcp.logs.read`. Benchmark evidence must be produced on the designated Ubuntu 24.04 host and recorded under `reports/acceptance/`; no benchmark result is assumed by this repository.
+
+## Integration status
+
+The `integration/finalize-ubuntu2404` branch consolidates the Security & Infrastructure implementation with the Technical Lead workstream definition, adds defensive fixes and automated HTTP/performance tooling. It is a release-readiness candidate, **not a claim of completed live acceptance**.
+
+Open acceptance gates include real Keycloak token flows, trusted Caddy TLS from a second LAN client, systemd identity/sandbox inspection, PostgreSQL volume persistence on the target host and measured per-tool p95 latency. Record results and limitations before declaring the project accepted.

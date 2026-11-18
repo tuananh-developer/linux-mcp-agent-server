@@ -1,51 +1,58 @@
 # Infrastructure Docker Compose runbook
 
-`deploy/compose/compose.yaml` manages the supporting identity and TLS reverse-proxy containers on the Ubuntu 24.04 host. The Python MCP server itself runs natively under `systemd` (`deploy/systemd/linux-mcp-agent.service`) and is not containerized.
+`deploy/compose/compose.yaml` manages supporting identity and TLS services on the Ubuntu 24.04 host. The Python MCP application runs natively under systemd and is not containerized.
 
-## Services and security controls
+## Services and network boundaries
 
-| Service | Image | Network & Port Binding | Controls |
+| Service | Image | Network / port | Responsibility |
 |---|---|---|---|
-| `postgres` | `postgres:18.6-bookworm` | Internal network `identity-backend` only; no host ports published | Named volume `keycloak-postgres`, `pg_isready` healthcheck, `no-new-privileges:true` |
-| `keycloak` | `quay.io/keycloak/keycloak:26.8.1` | `identity-backend` + loopback port `127.0.0.1:8080:8080` | Waits for healthy `postgres`, enables `resource-indicators`, `KC_HOSTNAME_STRICT=true`, `no-new-privileges:true` |
-| `caddy` | `caddy:2.11.7-alpine` | `network_mode: host`, gated behind `--profile lan` | Read-only `Caddyfile` mount, `cap_drop: ALL`, `cap_add: NET_BIND_SERVICE`, `no-new-privileges:true` |
+| `postgres` | `postgres:18.6-bookworm` | Private `identity-backend`; no published port | Keycloak persistence |
+| `keycloak` | `quay.io/keycloak/keycloak:26.8.1` | Private network + `127.0.0.1:8080`; management port internal only | OAuth/OIDC and token introspection |
+| `caddy` | `caddy:2.11.7-alpine` | Host network, optional `lan` profile | Internal TLS and allowlisted LAN routes |
 
-## Environment setup (secrets management)
+PostgreSQL does not store MCP metrics or process snapshots. The application has no database.
 
-1. Copy the template to `.env` (which is git-ignored):
-   ```bash
-   cd deploy/compose
-   cp .env.example .env
-   chmod 0600 .env
-   ```
-2. Replace `POSTGRES_PASSWORD` and `KEYCLOAK_ADMIN_PASSWORD` in `.env` with strong random values:
-   ```bash
-   openssl rand -base64 32
-   ```
-3. Never commit `.env`, database dumps, or Caddy PKI private keys to Git.
+## PostgreSQL 18 storage
 
-## Validate and start the stack
+The PostgreSQL 18 image uses a version-specific data directory under `/var/lib/postgresql`. The named volume must be mounted at that parent path:
 
-1. Validate the Compose configuration:
-   ```bash
-   cd deploy/compose
-   docker compose --env-file .env.example -f compose.yaml config --quiet
-   ```
-2. Start PostgreSQL and Keycloak first (Caddy remains off until Keycloak and the MCP service are configured and verified):
-   ```bash
-   docker compose --env-file .env -f compose.yaml up -d postgres keycloak
-   docker compose --env-file .env -f compose.yaml ps
-   ```
-3. Configure the `linux-agent` realm and clients following `../keycloak/README.md`, and start the native `linux-mcp-agent.service` following `../systemd/README.md`.
-4. Once local introspection and audience validation succeed, start the LAN reverse proxy:
-   ```bash
-   docker compose --env-file .env -f compose.yaml --profile lan up -d caddy
-   ```
+```yaml
+- keycloak-postgres:/var/lib/postgresql
+```
 
-## Verify socket exposure
+For a fresh installation, verify that data survives a container recreation. If a previous installation used the older `/var/lib/postgresql/data` mount target with a PostgreSQL 18 image, back up the running database before changing the volume layout. Do not remove a named volume or old container until the Keycloak realm has been restored and verified.
 
-Confirm that PostgreSQL (`5432`) is not bound on the host and that MCP (`3000`) and Keycloak (`8080`) bind strictly to `127.0.0.1`:
+## Secrets
 
 ```bash
-ss -lntp | grep -E ':(443|3000|8080|5432)\b'
+cd deploy/compose
+cp .env.example .env
+chmod 0600 .env
+openssl rand -base64 32
 ```
+
+Use separate strong values for `POSTGRES_PASSWORD` and `KEYCLOAK_ADMIN_PASSWORD`. Store them in a secret manager or protected root-owned file. Never commit `.env`, database dumps or Caddy PKI private keys.
+
+## Validate and start
+
+```bash
+docker compose --env-file .env -f compose.yaml config --quiet
+docker compose --env-file .env -f compose.yaml up -d postgres keycloak
+docker compose --env-file .env -f compose.yaml ps
+```
+
+PostgreSQL uses `pg_isready`. Keycloak uses its readiness endpoint via the container-internal management port 9000; no host port is published. Caddy depends on Keycloak being healthy and is gated behind the `lan` profile.
+
+Configure the realm, install the MCP service and verify local token introspection before starting Caddy:
+
+```bash
+docker compose --env-file .env -f compose.yaml --profile lan up -d caddy
+```
+
+## Verify exposure
+
+```bash
+ss -lntp | grep -E ':(443|3000|8080|5432|9000)\\b'
+```
+
+MCP 3000 and Keycloak 8080 must remain loopback-only. PostgreSQL 5432 and Keycloak management 9000 must not be published. Only Caddy's intended HTTPS ingress should be reachable from the demo LAN.

@@ -163,8 +163,12 @@ def _parse_entry(line: str) -> dict[str, Any] | None:
     entry = cast(dict[str, object], entry_object)
     raw_ts = entry.get("__REALTIME_TIMESTAMP")
     timestamp = None
-    if isinstance(raw_ts, str) and raw_ts.isdigit():
-        timestamp = datetime.fromtimestamp(int(raw_ts) / 1_000_000, UTC).isoformat()
+    if isinstance(raw_ts, str) and raw_ts.isdigit() and len(raw_ts) <= 20:
+        try:
+            timestamp = datetime.fromtimestamp(int(raw_ts) / 1_000_000, UTC).isoformat()
+        except (OSError, OverflowError, ValueError):
+            # Journal payloads are untrusted; preserve the entry without a malformed timestamp.
+            timestamp = None
     raw_priority = entry.get("PRIORITY")
     priority: int | None = None
     if isinstance(raw_priority, (str, int, float)) and not isinstance(raw_priority, bool):

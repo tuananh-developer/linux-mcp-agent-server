@@ -21,8 +21,8 @@ def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
-def get_system_metrics(interval: float = 0.1) -> dict[str, Any]:
-    cpu_percent = psutil.cpu_percent(interval=interval)
+def get_system_metrics() -> dict[str, Any]:
+    cpu_percent = psutil.cpu_percent(interval=0.2)
     memory = psutil.virtual_memory()
     try:
         load_average = list(psutil.getloadavg())
@@ -93,6 +93,7 @@ def list_processes(
         raise ValueError("name_contains must contain between 1 and 64 non-whitespace characters")
 
     memory_total = psutil.virtual_memory().total
+    sample_started_at = time.monotonic()
     first_host = psutil.cpu_times()
     first_host_total = sum(first_host)
     snapshots: dict[int, dict[str, Any]] = {}
@@ -124,6 +125,7 @@ def list_processes(
 
     time.sleep(sample_window_seconds)
     second_host = psutil.cpu_times()
+    actual_sample_window_ms = round((time.monotonic() - sample_started_at) * 1000)
     host_delta = max(0.000001, sum(second_host) - first_host_total)
     results: list[dict[str, Any]] = []
     for pid, first in snapshots.items():
@@ -161,7 +163,8 @@ def list_processes(
     results.sort(key=lambda item: item["cpuPercent" if sort_by == "cpu" else "memoryPercent"], reverse=True)
     return {
         "timestamp": _timestamp(),
-        "sampleWindowMs": int(sample_window_seconds * 1000),
+        "sampleWindowMs": actual_sample_window_ms,
+        "requestedSampleWindowMs": round(sample_window_seconds * 1000),
         "cpuPercentSemantics": "process_cpu_time_delta_over_total_host_cpu_time_delta",
         "memoryPercentSemantics": "process_rss_over_physical_memory_total",
         "processes": results[:limit],

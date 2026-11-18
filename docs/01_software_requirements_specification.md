@@ -42,7 +42,7 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 ### 2.3 Operating environment
 
 - Ubuntu 24.04 LTS x86_64 is the primary acceptance target.
-- Python 3.14 and 3.15 are the CI compatibility targets; Python 3.14 is the development minor selected by `.python-version`.
+- Python 3.14 and 3.15 are the CI compatibility targets; Python 3.15.2 is the local development/runtime baseline selected by `.python-version`.
 - The MCP application binds to loopback and is exposed to the LAN only through Caddy HTTPS.
 - Keycloak and PostgreSQL provide authorization and identity persistence; systemd supervises the native MCP process.
 
@@ -129,6 +129,9 @@ The application shall read host metrics through supported Linux interfaces and p
 The project shall not be marked accepted until all acceptance evidence is recorded. A green unit-test/CI run alone does not prove Keycloak, TLS, LAN deployment or end-to-end integration.
 
 ## 8. Traceability
+
+The detailed requirement-to-module, automated-test and live-acceptance mapping is maintained in [docs/11_requirements_traceability.md](11_requirements_traceability.md). This matrix distinguishes automated coverage from deployment evidence; an unexecuted host check is not marked PASS.
+
 
 The implementation mapping is:
 

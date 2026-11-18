@@ -17,7 +17,7 @@ The MCP process is native on the Ubuntu host, runs as the dedicated non-root use
 
 ## Install
 
-1. Install Git, build tools, `journalctl`, and uv 0.13.6.
+1. Install Git, build tools, `journalctl`, and uv 0.13.8.
 2. Clone the repository to `/opt/linux-mcp-agent-server`.
 3. Create a dedicated service account and install the project environment:
 

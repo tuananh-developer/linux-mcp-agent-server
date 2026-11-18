@@ -9,7 +9,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
-      - keycloak-postgres:/var/lib/postgresql/data
+      # PostgreSQL 18 stores its versioned PGDATA below /var/lib/postgresql.
+      - keycloak-postgres:/var/lib/postgresql
     networks:
       - identity-backend
     healthcheck:
@@ -46,6 +47,14 @@ services:
       KC_FEATURES: resource-indicators
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
+    healthcheck:
+      # Keycloak's management interface listens on 9000 inside the container.
+      # The image does not include curl; use the documented Bash TCP probe.
+      test: ["CMD", "/bin/bash", "-c", "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep -q 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -75,7 +84,8 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on:
-      - keycloak
+      keycloak:
+        condition: service_healthy
 
 networks:
   identity-backend:
