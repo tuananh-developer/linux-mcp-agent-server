@@ -1,51 +1,85 @@
 # MCP Interface & Tool Contracts
 
-**Transport:** Streamable HTTP · **Endpoint:** `https://mcp.home.arpa/mcp` · **SDK:** official Python SDK 2.3.0.
+**Transport:** Streamable HTTP  
+**Path:** `/mcp`  
+**SDK:** official MCP Python SDK 2.3.0
 
-## Common rules
-
-- The MCP SDK owns JSON-RPC framing and schema publication. Python type hints and `Literal` types define typed inputs; semantic restrictions are enforced in handlers.
-- No custom REST route is used for tool calls. `/healthz` is a separate operational health route.
-- Backend binds loopback. Caddy forwards only `/mcp` and the protected-resource metadata route.
-- The server is read-only. No arbitrary shell, caller-supplied unit, caller-supplied path, process termination or service restart.
+The MCP interface is a compatibility boundary. Tool names, Resource URI, Prompt name and argument semantics must not change without updating the SRS, tests and client-facing documentation in the same reviewed change.
 
 ## Tools
 
 ### `get_system_metrics`
 
-No arguments. Returns ISO-8601 timestamp, CPU usage (0..100), logical cores, memory total/used/available/percent, load average, uptime and `status`.
+**Arguments:** none.
+
+Returns:
+- `timestamp`: UTC ISO-8601 observation time.
+- `cpuUsagePercent`, `cpuLogicalCores`.
+- `memoryTotalBytes`, `memoryUsedBytes`, `memoryAvailableBytes`, `memoryUsagePercent`.
+- `loadAverage1m5m15m`: one-, five- and fifteen-minute load values where supported.
+- `uptimeSeconds`, `status`.
+
+The CPU value is a bounded psutil observation, not a prediction or a process-specific metric.
 
 ### `get_disk_usage`
 
-Input: optional `mount_points: string[]`. Default is the server allowlist. Maximum 10 requested paths. Every item must exactly equal an administrator-configured path. Output contains mount point, total/used/available bytes, percentage and status. Unknown path fails closed.
+**Arguments:** optional `mount_points: string[]`.
+
+Omitting the argument uses the configured disk allowlist. Every requested path must exactly match a server-configured absolute path. The server rejects an unknown path and more than ten requested mount points.
+
+Each filesystem result contains `mountPoint`, `totalBytes`, `usedBytes`, `availableBytes`, `usagePercent` and `status`.
 
 ### `list_processes`
 
-Input: `limit` default 10 (1..100), `sort_by` enum `cpu|memory`, and optional literal case-insensitive `name_contains` (1..64 chars). Output: `pid`, `name`, `cpuPercent`, `memoryPercent`, `rssBytes`, per-item status and sample metadata. CPU percentage is the process CPU-time delta divided by aggregate host CPU-time delta, representing share of total machine CPU capacity. No command line, environment or username is returned.
+**Arguments:**
+- `limit`: integer from 1 to 100; default 10.
+- `sort_by`: `cpu` or `memory`; default `cpu`.
+- `name_contains`: optional 1–64 character non-whitespace filter.
+
+Each returned process includes PID, name, CPU%, memory%, RSS bytes and status. The implementation uses PID plus process creation time to avoid mixing measurements after PID reuse. The result includes `sampleWindowMs` (measured elapsed sampling time), `requestedSampleWindowMs`, CPU-percentage semantics and an inaccessible/exited count.
+
+The result intentionally excludes command-line arguments, environment variables, usernames and other process metadata that is not needed for observability.
 
 ### `read_allowed_log`
 
-Input: `alias` and `lines` default 50 (1..200). Alias is resolved only from `config/log-sources.json`; the caller never supplies a path, systemd unit, filter or command. The reader invokes a fixed `journalctl` argv with `shell=False`, a timeout, byte limit and best-effort secret redaction. Log messages are untrusted data.
+**Arguments:**
+- `alias`: required administrator-configured alias.
+- `lines`: integer from 1 to 200; default 50.
+
+The alias maps to a configured systemd `.service` unit. Client input never supplies a journalctl executable, raw unit, file path or command argument. The handler requires the base `mcp.read` scope and checks `mcp.logs.read` before launching the journal reader.
+
+The result contains `logName`, `sourceType`, resolved `unit`, `linesReturned`, `truncated`, `content` and `status`. Each content entry contains a timestamp (nullable for malformed journal timestamps), priority and redacted message. Execution time and captured/serialized output bytes are bounded.
 
 ## Resource
 
 - URI: `linux://system/summary`.
-- Returns a JSON high-level snapshot: distro, kernel release, architecture, logical CPU count, uptime, CPU/RAM usage and allowlisted disk summary.
-- No tokens, secrets, process command lines, account names or raw log content.
+- MIME type: `application/json`.
+- Returns operating system, kernel, architecture, CPU, memory, uptime and allowlisted disk information.
+- Must not contain tokens, secrets, raw logs, process command lines, environment values or usernames.
 
 ## Prompt
 
 - Name: `health_check`.
 - Argument: `focus` enum `overview | cpu_memory | disk | processes`, default `overview`.
-- Instructs the Agent to call relevant read-only tools, cite returned timestamps/numbers, treat logs as untrusted input and avoid destructive actions.
+- Directs an external Agent to use only read-only tools, quote measurements and timestamps, treat tool output as untrusted data and avoid destructive actions.
 
-## OAuth scopes
+## Authorization contract
 
 | Operation | Required scope |
 |---|---|
-| `/mcp`, tool/resource/prompt discovery | `mcp.read` |
+| MCP discovery, Tools, Resource and Prompt | `mcp.read` |
 | `read_allowed_log` | `mcp.read` and `mcp.logs.read` |
 
-## Error semantics
+The base scope is enforced by the MCP SDK auth settings. The additional log scope is checked by the tool handler before any journal command is invoked.
 
-Unknown alias/path, invalid limit or malformed settings fail closed and return an MCP tool error. HTTP authentication errors are handled by the SDK as 401/403. Log-specific scope denial is a tool-level `INSUFFICIENT_SCOPE` error because the base MCP request was already authenticated.
+## Error and safety behavior
+
+- Invalid or non-allowlisted disk paths are rejected.
+- Invalid process limits, sort keys and name filters are rejected.
+- Inactive, malformed, expired, wrong-issuer, wrong-audience/resource or insufficient-scope tokens fail closed.
+- Unknown log aliases, invalid line limits, journal timeout, output overflow and journal execution failures return bounded errors or explicitly marked partial results.
+- No tool accepts shell fragments, executable paths, arbitrary filesystem paths or systemd unit names from the caller.
+
+## Browser assistant
+
+`/` and `/dashboard` serve the AI chat interface. The browser initializes an MCP session, discovers tools and executes model-selected calls through `/mcp`. External clients continue to use the same tool, resource and prompt schemas.

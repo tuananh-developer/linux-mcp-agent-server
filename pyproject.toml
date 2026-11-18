@@ -39,6 +39,9 @@ dev = [
   "ruff==0.17.4",
 ]
 
+[tool.hatch.build]
+artifacts = ["src/linux_mcp_agent/web/*"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/linux_mcp_agent"]
 
@@ -52,6 +55,7 @@ asyncio_default_fixture_loop_scope = "function"
 line-length = 100
 target-version = "py314"
 src = ["src", "tests"]
+extend-exclude = ["tools/ui-ux-pro-max"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]

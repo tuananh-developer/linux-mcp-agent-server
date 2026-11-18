@@ -3,7 +3,13 @@
     encode zstd gzip
 
     @mcp path /mcp /.well-known/oauth-protected-resource/mcp
-    reverse_proxy @mcp 127.0.0.1:3000
+    reverse_proxy @mcp 127.0.0.1:3002
+
+    @dashboard path / /dashboard /dashboard/assets/app.js /dashboard/assets/app.css /dashboard/assets/mcp-client.mjs /dashboard/assets/agent-ui.js /dashboard/assets/agent-client.mjs
+    reverse_proxy @dashboard 127.0.0.1:3002
+
+    @agent path /agent/status /agent/chat
+    reverse_proxy @agent 127.0.0.1:3002
 
     respond 404
 }

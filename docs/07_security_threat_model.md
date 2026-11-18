@@ -19,8 +19,8 @@ Assets: system telemetry, journal content, OAuth tokens and client secrets, Keyc
 
 | Threat | Control | Evidence |
 |---|---|---|
-| Spoofing | TLS + OAuth issuer/audience/scope validation | Auth integration tests |
-| Tampering | HTTPS + SDK schema validation + allowlists | Input and TLS tests |
+| Spoofing | TLS + OAuth issuer/audience/scope validation | `tests/test_auth_claims.py`; live Keycloak positive/negative checks remain an Ubuntu acceptance gate |
+| Tampering | HTTPS + SDK schema validation + allowlists | Unit tests for input validation and alias/path boundaries; second-device TLS test remains an Ubuntu acceptance gate |
 | Repudiation | Minimal structured logs with non-secret client ID | Audit review |
 | Information disclosure | Bounded allowlisted logs, no command line/env, secret redaction | Log tests |
 | Denial of service | Bounded line count, byte output, process sampling, journal timeout | Performance tests |

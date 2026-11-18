@@ -16,8 +16,11 @@ from typing import Any, cast
 _ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@:-]{1,128}$")
 _SECRET_PATTERNS = (
-    re.compile(r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/-]+=*"),
-    re.compile(r"(?i)\b(password|passwd|secret|token|api[_-]?key)(\s*[=:]\s*)[^\s,;]+"),
+    re.compile(r"(?i)(authorization\s*:\s*(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]+"),
+    re.compile(
+        r'(?i)("?(?:password|passwd|secret|token|client_secret|access_token|refresh_token|api[_-]?key)"?\s*[=:]\s*)"?[^\s",;]+"?'
+    ),
+    re.compile(r"(?i)(https?://[^/\s:@]+:)[^@\s/]+(@)"),
 )
 
 
@@ -143,7 +146,7 @@ def _redact(message: str) -> str:
         if pattern.groups == 1:
             value = pattern.sub(r"\1[REDACTED]", value)
         else:
-            value = pattern.sub(r"\1\2[REDACTED]", value)
+            value = pattern.sub(r"\1[REDACTED]\2", value)
     return value
 
 
@@ -160,8 +163,12 @@ def _parse_entry(line: str) -> dict[str, Any] | None:
     entry = cast(dict[str, object], entry_object)
     raw_ts = entry.get("__REALTIME_TIMESTAMP")
     timestamp = None
-    if isinstance(raw_ts, str) and raw_ts.isdigit():
-        timestamp = datetime.fromtimestamp(int(raw_ts) / 1_000_000, UTC).isoformat()
+    if isinstance(raw_ts, str) and raw_ts.isdigit() and len(raw_ts) <= 20:
+        try:
+            timestamp = datetime.fromtimestamp(int(raw_ts) / 1_000_000, UTC).isoformat()
+        except (OSError, OverflowError, ValueError):
+            # Journal payloads are untrusted; preserve the entry without a malformed timestamp.
+            timestamp = None
     raw_priority = entry.get("PRIORITY")
     priority: int | None = None
     if isinstance(raw_priority, (str, int, float)) and not isinstance(raw_priority, bool):
@@ -185,7 +192,7 @@ def read_allowed_log(
 ) -> dict[str, Any]:
     if alias not in sources:
         raise PermissionError("Log alias is not allowlisted")
-    if not 1 <= lines <= 200:
+    if isinstance(lines, bool) or not 1 <= lines <= 200:
         raise ValueError("lines must be between 1 and 200")
     unit = sources[alias]
     if not _UNIT_RE.fullmatch(unit):

@@ -2,28 +2,85 @@
 
 ## Roles
 
-- Keycloak is the OAuth 2.1 authorization server.
-- Linux MCP Agent Server is a resource server. It never issues a token.
-- External Agent/MCP Client obtains an access token using the configured client flow and sends `Authorization: Bearer ...`.
+- **Keycloak 26.8.1:** OAuth/OIDC authorization server. It authenticates configured clients and issues access tokens.
+- **Linux MCP Agent Server:** OAuth resource server. It never issues tokens; it validates access tokens using RFC 7662 introspection.
+- **Caddy 2.11.7:** TLS terminator and LAN reverse proxy. It does not replace application-level token validation.
+- **PostgreSQL 18.6:** Keycloak persistence only.
 
-## Token validation
+## Canonical resource configuration
 
-The MCP SDK requires `mcp.read` globally. `KeycloakIntrospectionVerifier` calls `MCP_INTROSPECTION_URL` on the private loopback Keycloak HTTP listener using a confidential resource-server client; Caddy never publishes token introspection to the LAN. It accepts a token only when `active=true`, `iss` exactly equals the configured issuer, `exp` exists and is in the future, `nbf` is not in the future, `aud` contains the exact canonical MCP resource URI, `client_id` exists, and `mcp.read` is granted. It returns `AccessToken.resource` equal to `MCP_RESOURCE_URI`; `AuthSettings.validate_token_resource=True` enforces the same resource at SDK level.
+The canonical protected resource is `https://mcp.home.arpa/mcp`.
 
-`read_allowed_log` additionally checks `mcp.logs.read`. This produces a tool-level insufficient-scope error; it does not claim that the entire HTTP request was rejected at the gateway.
+`MCP_RESOURCE_URI` and `MCP_REQUIRED_AUDIENCE` are normalized by removing trailing slashes and must then be identical. Configuration rejects a mismatch because the MCP SDK resource binding and the introspected token audience must refer to the same resource. The external MCP Client requests this resource from Keycloak and sends the resulting bearer access token to the MCP endpoint.
 
-## Resource indicator
+The Keycloak realm template includes:
+- Realm `linux-agent`.
+- Base client scope `mcp.read`.
+- Optional journal scope `mcp.logs.read`.
+- Confidential resource-server client `linux-mcp-resource-server`.
+- Example external client `linux-mcp-agent-client` with a resource audience mapper.
 
-Canonical resource URI: `https://mcp.home.arpa/mcp`. The MCP client must request `resource` with exactly this value and a scope containing the needed scopes. Keycloak 26.8.1 requires the experimental `resource-indicators` feature and a matching `resource_url` attribute on the resource-server client. The integration is not considered accepted until the token's `aud` and introspection response are verified on the deployed realm.
+The template contains placeholder secrets only. Replace them using a secure secret source before importing the realm. Do not commit generated realm exports or runtime secrets.
 
-## TLS and LAN
+## Token validation flow
 
-Caddy 2.11.7 uses `tls internal` for both `mcp.home.arpa` and `auth.home.arpa`. Export only the Caddy root certificate to client trust stores; never export the CA private key. MCP backend `127.0.0.1:3000`, Keycloak `127.0.0.1:8080`, PostgreSQL internal Docker network. UFW should allow TCP 443 only from the selected demo subnet/client addresses.
+1. The MCP SDK extracts the bearer token from the HTTP request.
+2. `KeycloakIntrospectionVerifier` sends the token to the loopback-only `MCP_INTROSPECTION_URL` using the resource-server client's Basic credentials.
+3. The verifier fails closed if the endpoint is unavailable, the response is malformed or the token is invalid.
+4. `validate_introspection_payload` validates:
+   - `active is true`;
+   - exact configured `iss`;
+   - mandatory, finite `exp` later than the current time;
+   - optional finite `nbf` not later than the current time;
+   - exact configured MCP resource in `aud`;
+   - required `mcp.read` scope;
+   - a non-empty client ID.
+5. The verifier supplies the canonical resource to the MCP SDK. `AuthSettings.validate_token_resource=True` enforces the same resource binding at SDK level.
+6. `read_allowed_log` independently checks for `mcp.logs.read` before it runs journalctl. Missing permission never invokes the journal reader.
 
-## Reverse proxy route allowlist
+Introspection responses and journal content are treated as untrusted input. Tokens, client secrets and raw authorization headers must not be written to application logs.
 
-Caddy forwards MCP `/mcp` and `/.well-known/oauth-protected-resource/mcp`. On the auth hostname, expose only realm OIDC metadata, token endpoint and JWKS endpoint. Admin console/API routes are loopback-only; unmatched LAN paths return 404. No wildcard CORS.
+## Introspection cache and revocation
 
-## Failure behavior
+The verifier caches only successful token introspection results in process memory. Cache keys are SHA-256 digests of the token, not the raw token. The cache is bounded to 1,024 entries.
 
-Missing/inactive/expired token, wrong issuer/audience/resource or missing base scope must not execute a tool. Missing log scope must not execute `journalctl`. Untrusted TLS CA fails at the client. Unknown Host/Origin and unlisted Caddy path are rejected before tool invocation.
+- `MCP_INTROSPECTION_CACHE_TTL_SECONDS` defaults to 30 seconds and accepts values from 0 to 300 seconds.
+- Each entry expires at the earlier of the configured cache TTL or the token's `exp` time.
+- Failed or inactive introspection responses are not cached.
+- Token revocation or a scope change in Keycloak is not pushed into the MCP process. A previously accepted token can remain authorized until its cache entry expires, for at most the configured TTL and never beyond the token expiry.
+- Set the TTL to `0` to disable caching and introspect every request. This reduces the revocation delay but increases Keycloak traffic and makes each request dependent on Keycloak availability.
+
+The TTL is a security/availability trade-off and must be selected explicitly for the target deployment. The default limits the stale-authorization window to 30 seconds.
+
+## TLS and LAN ingress
+
+Caddy uses `tls internal` for `mcp.home.arpa` and `auth.home.arpa`. It forwards:
+- MCP `/mcp` and the MCP protected-resource metadata path on the MCP hostname.
+- Only OIDC discovery, token and JWKS endpoints on the Keycloak hostname.
+- Keycloak administration paths only when the client is loopback.
+
+Unmatched hosts/paths return 404. Do not add wildcard routes or wildcard CORS to make an untrusted client work.
+
+The Caddy internal CA root certificate must be installed in each trusted MCP client. The CA private key must remain on the server and must never be exported.
+
+## Network exposure
+
+- MCP backend: `127.0.0.1:3002`.
+- Keycloak HTTP: `127.0.0.1:8080`.
+- PostgreSQL: private Docker network only; no host port.
+- Caddy: host network, intended LAN ingress on HTTPS only.
+- Keycloak management/health port 9000: container-internal; not published to the host or LAN.
+
+Firewall policy should allow TCP 443 only from the selected demo subnet/client addresses. Do not expose 3002, 8080 or 5432.
+
+## Residual risks and acceptance
+
+Keycloak Resource Indicators are marked experimental in the pinned Keycloak version. The feature must be verified with the imported realm and the actual token response; do not disable audience/resource validation to work around a mismatch.
+
+Membership in `systemd-journal` provides broader OS-level journal visibility than the MCP alias list. The application enforces the allowlist and bounded reader, but this residual service-account privilege must be reviewed on the acceptance host.
+
+Before enabling LAN ingress, verify a real token's `iss`, `aud`, scopes and introspection result; verify TLS trust from a second device; verify admin routes are unavailable from LAN; and record the evidence and limitations.
+
+## Browser assistant
+
+The dashboard shell and static assets are public. The browser uses `/mcp` for host data, and the model gateway applies the configured Host, Origin and base scope checks. Journal reads remain subject to the MCP log scope. The Bearer token is held in tab memory.
