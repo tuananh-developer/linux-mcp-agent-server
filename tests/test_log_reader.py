@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+import linux_mcp_agent.log_reader as log_reader
 from linux_mcp_agent.log_reader import (
     LogReadError,
     load_log_sources,
@@ -28,7 +29,9 @@ def test_load_log_sources_rejects_non_service_unit(tmp_path: Path) -> None:
         load_log_sources(config)
 
 
-def test_read_allowed_log_uses_fixed_argv_and_redacts_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_read_allowed_log_uses_fixed_argv_and_redacts_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output = json.dumps({
         "__REALTIME_TIMESTAMP": "1793520000000000",
         "PRIORITY": "6",
@@ -36,7 +39,7 @@ def test_read_allowed_log_uses_fixed_argv_and_redacts_secrets(monkeypatch: pytes
     })
     captured: dict[str, Any] = {}
 
-    def fake_which(path: str) -> str:
+    def fake_which(_path: str) -> str:
         return "/usr/bin/journalctl"
 
     def fake_run(args: list[str], **kwargs: Any) -> tuple[str, bool, int]:
@@ -49,8 +52,14 @@ def test_read_allowed_log_uses_fixed_argv_and_redacts_secrets(monkeypatch: pytes
     result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
 
     assert captured["args"] == [
-        "/usr/bin/journalctl", "--no-pager", "--output=json",
-        "--output-fields=__REALTIME_TIMESTAMP,PRIORITY,MESSAGE", "--unit", "ssh.service", "--lines", "5",
+        "/usr/bin/journalctl",
+        "--no-pager",
+        "--output=json",
+        "--output-fields=__REALTIME_TIMESTAMP,PRIORITY,MESSAGE",
+        "--unit",
+        "ssh.service",
+        "--lines",
+        "5",
     ]
     assert captured["kwargs"]["max_output_bytes"] == 65536
     assert "[REDACTED]" in result["content"][0]["message"]
@@ -66,13 +75,44 @@ def test_read_allowed_log_rejects_unknown_alias() -> None:
 def test_read_allowed_log_rejects_out_of_range_lines() -> None:
     with pytest.raises(ValueError):
         read_allowed_log("ssh", 201, sources={"ssh": "ssh.service"})
+    with pytest.raises(ValueError):
+        read_allowed_log("ssh", True, sources={"ssh": "ssh.service"})
+
+
+def test_read_allowed_log_redacts_json_secrets_basic_auth_and_url_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = json.dumps({
+        "__REALTIME_TIMESTAMP": "1793520000000000",
+        "PRIORITY": "6",
+        "MESSAGE": (
+            'Authorization: Basic dXNlcjpwYXNz "client_secret": "s3cr3t" '
+            "https://admin:topsecret@auth.home.arpa/realms/linux-agent"
+        ),
+    })
+
+    def fake_which(_path: str) -> str:
+        return "/usr/bin/journalctl"
+
+    def fake_run(args: list[str], **kwargs: Any) -> tuple[str, bool, int]:
+        del args, kwargs
+        return output + "\n", False, 0
+
+    monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
+    monkeypatch.setattr("linux_mcp_agent.log_reader.run_journalctl_bounded", fake_run)
+    result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
+    msg = result["content"][0]["message"]
+    assert "dXNlcjpwYXNz" not in msg
+    assert "s3cr3t" not in msg
+    assert "topsecret" not in msg
+    assert msg.count("[REDACTED]") == 3
 
 
 def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_which(_path: str) -> str:
         return "/usr/bin/journalctl"
 
-    def timeout(*args: Any, **kwargs: Any) -> tuple[str, bool, int]:
+    def timeout(*_args: Any, **_kwargs: Any) -> tuple[str, bool, int]:
         raise TimeoutError("Journal query exceeded its configured time limit")
 
     monkeypatch.setattr("linux_mcp_agent.log_reader.shutil.which", fake_which)
@@ -83,10 +123,15 @@ def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_bounded_process_reader_caps_output() -> None:
     output, truncated, return_code = run_journalctl_bounded(
-        [sys.executable, "-c", "print('x' * 10000)"],
+        [
+            sys.executable,
+            "-c",
+            "import time; print('x' * 10000, flush=True); time.sleep(5)",
+        ],
         timeout_seconds=2.0,
         max_output_bytes=128,
     )
+
     assert len(output.encode("utf-8")) <= 129
     assert truncated is True
     assert return_code != 0
@@ -99,3 +144,38 @@ def test_bounded_process_reader_enforces_timeout() -> None:
             timeout_seconds=0.05,
             max_output_bytes=128,
         )
+
+
+
+
+def test_read_allowed_log_handles_out_of_range_journal_timestamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = json.dumps({
+        "__REALTIME_TIMESTAMP": "99999999999999999999",
+        "PRIORITY": "6",
+        "MESSAGE": "service still started",
+    })
+
+    def fake_which(_path: str) -> str:
+        return "/usr/bin/journalctl"
+
+    def fake_journalctl(
+        _args: list[str],
+        *,
+        timeout_seconds: float,
+        max_output_bytes: int,
+    ) -> tuple[str, bool, int]:
+        return output + "\n", False, 0
+
+    monkeypatch.setattr(log_reader.shutil, "which", cast(Any, fake_which))
+    monkeypatch.setattr(
+        log_reader,
+        "run_journalctl_bounded",
+        cast(Any, fake_journalctl),
+    )
+
+    result = read_allowed_log("ssh", 5, sources={"ssh": "ssh.service"})
+
+    assert result["content"][0]["timestamp"] is None
+    assert result["content"][0]["message"] == "service still started"
