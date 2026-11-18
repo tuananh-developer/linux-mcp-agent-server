@@ -62,7 +62,7 @@ def load_env_file(path: Path) -> None:
 def make_opener(ca_cert: str | None, insecure: bool):
     """Build a direct HTTP opener; local .home.arpa traffic must not use proxies."""
     if insecure:
-        context = ssl._create_unverified_context()  # noqa: SLF001 - opt-in demo flag only
+        context = ssl._create_unverified_context()
     elif ca_cert:
         try:
             context = ssl.create_default_context(cafile=ca_cert)
