@@ -1,11 +1,15 @@
 import os
-
-import httpx
 import pytest
+import httpx
 
-# TODO: Sẽ điền thông tin thật vào đây khi WS2 bàn giao
 LIVE_HOST: str = os.getenv("MCP_LIVE_HOST", "https://<IP_CHUA_CO>")
 VALID_TOKEN: str = os.getenv("MCP_VALID_TOKEN", "<TOKEN_CHUA_CO>")
+
+# CI/CD Guard: Tự động bỏ qua file test này trên GitHub Actions nếu chưa có Server thật
+pytestmark = pytest.mark.skipif(
+    "IP_CHUA_CO" in LIVE_HOST,
+    reason="BLOCKED: Waiting for WS2 to provide Live Host IP and credentials"
+)
 
 INVALID_TOKENS: dict[str, str] = {
     "expired": "<EXPIRED_TOKEN>",
@@ -24,7 +28,6 @@ def headers() -> dict[str, str]:
 async def test_health_check_and_summary(headers: dict[str, str]) -> None:
     """INT-02: Kiểm tra health_check và linux://system/summary"""
     async with httpx.AsyncClient(verify=False) as client:
-        # Giả định endpoint health và summary
         health_res = await client.get(f"{LIVE_HOST}/health")
         assert health_res.status_code == 200
         
@@ -48,7 +51,6 @@ async def test_mcp_tools_invocation(headers: dict[str, str]) -> None:
                 json={"method": f"tools/{tool}", "params": {}}
             )
             assert res.status_code == 200, f"Tool {tool} failed"
-            # Ghi log kết quả (đã sanitized)
             print(f"[{tool}] Success: {res.json()}")
 
 @pytest.mark.parametrize("scenario,token", INVALID_TOKENS.items())
@@ -68,4 +70,4 @@ async def test_missing_logs_scope_denied() -> None:
     async with httpx.AsyncClient(verify=False) as client:
         res = await client.post(f"{LIVE_HOST}/mcp", headers=headers, json={"method": "tools/read_log"})
         assert res.status_code == 403
-        assert "journalctl" not in res.text # Phải bị chặn trước khi chạm tới journalctl
+        assert "journalctl" not in res.text
