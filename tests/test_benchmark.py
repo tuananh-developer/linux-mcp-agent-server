@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.benchmark_mcp import calculate_percentile, evaluate_tool_acceptance
+from linux_mcp_agent.benchmark import calculate_percentile, evaluate_tool_acceptance
 
 
 def testcalculate_percentile_uses_nearest_rank() -> None:
