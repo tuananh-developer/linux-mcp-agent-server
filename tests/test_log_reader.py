@@ -123,10 +123,15 @@ def test_read_allowed_log_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_bounded_process_reader_caps_output() -> None:
     output, truncated, return_code = run_journalctl_bounded(
-        [sys.executable, "-c", "print('x' * 10000)"],
+        [
+            sys.executable,
+            "-c",
+            "import time; print('x' * 10000, flush=True); time.sleep(5)",
+        ],
         timeout_seconds=2.0,
         max_output_bytes=128,
     )
+
     assert len(output.encode("utf-8")) <= 129
     assert truncated is True
     assert return_code != 0
