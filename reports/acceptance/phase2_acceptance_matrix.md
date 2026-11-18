@@ -1,0 +1,13 @@
+# Phase 2 Acceptance Matrix - Workstream 3
+
+**Status:** In Progress
+**Environment:** Local CI (Passed) / Live Ubuntu 24.04 Host (Pending WS2 Prerequisites)
+
+| Req ID | Test Category / Verification Method | Expected Result | Actual Result (Local CI) | Actual Result (Live Host) | Evidence Path / Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **DEP-01** | **Deployment & Streamable HTTP**<br>Deploy integrated WS1+WS2 version via documented procedure. Verify `health_check` and Streamable HTTP using official MCP Client. | Caddy routes correctly to MCP Agent. Health check returns 200 OK. Streamable HTTP connection established. | PASS | BLOCKED | `reports/acceptance/logs/dep01_blocked.log`<br>*(Waiting on WS2: Reachable host/port or VPN route)* |
+| **FR-01** | **MCP Tools & System Resources**<br>Invoke 4 core tools (`read_log`, `get_status`, `list_services`, `system_metrics`), `linux://system/summary` resource, and health check over Streamable HTTP. | All tools return valid, sanitized JSON payloads. System summary includes `os` details. | PASS | BLOCKED | `reports/acceptance/logs/fr01_tools.log`<br>*(Waiting on WS2: Live Host IP)* |
+| **SEC-01** | **OAuth & Keycloak Authorization**<br>Run positive/negative token cases against real Keycloak: valid (Accept), inactive/malformed/expired/wrong-issuer/wrong-audience/missing-read (Reject). | 401/403 for all invalid tokens. 200 for valid token. | PASS | BLOCKED | `reports/acceptance/logs/sec01_oauth.log`<br>*(Waiting on WS2: Test realm/client/scopes & CA cert)* |
+| **SEC-02** | **Granular Log Scope Denial**<br>Attempt `read_log` with token containing `mcp.read` but missing `mcp.logs.read`. | 403 Forbidden denied at gateway/agent level **before** `journalctl` is invoked. | PASS | BLOCKED | `reports/acceptance/logs/sec02_scopes.log` |
+| **SEC-03** | **Infrastructure & Network Sandbox**<br>Verify systemd user/group sandboxing. Check PostgreSQL persistence after container recreation. Verify loopback-only Keycloak/DB bindings. Verify Keycloak Admin is inaccessible from 2nd LAN client. | Non-root execution confirmed. DB data persists. Ports 5432 & Keycloak internal not exposed to LAN. | N/A (Live only) | BLOCKED | `reports/acceptance/logs/sec03_infra.log`<br>*(Waiting on WS2: Deployment handoff Issue #19)* |
+| **PERF-01** | **Per-Tool Execution Benchmark**<br>Run automated script to collect p50/p95/p99 latency with production auth. Record successful/error counts and host/runtime metadata. | All 4 tools achieve **p95 < 2.0 seconds**. Raw JSON results sanitized and saved. | PASS (TCP Local) | BLOCKED | `reports/acceptance/logs/perf01_benchmark.json`<br>*(Cannot infer live p95 from local CI)* |
