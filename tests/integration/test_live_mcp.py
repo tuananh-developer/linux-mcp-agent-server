@@ -1,13 +1,14 @@
 import os
+from typing import Dict
 
 import httpx
 import pytest
 
 # TODO: Sẽ điền thông tin thật vào đây khi WS2 bàn giao
-LIVE_HOST = os.getenv("MCP_LIVE_HOST", "https://<IP_CHUA_CO>")
-VALID_TOKEN = os.getenv("MCP_VALID_TOKEN", "<TOKEN_CHUA_CO>")
+LIVE_HOST: str = os.getenv("MCP_LIVE_HOST", "https://<IP_CHUA_CO>")
+VALID_TOKEN: str = os.getenv("MCP_VALID_TOKEN", "<TOKEN_CHUA_CO>")
 
-INVALID_TOKENS = {
+INVALID_TOKENS: Dict[str, str] = {
     "expired": "<EXPIRED_TOKEN>",
     "wrong_issuer": "<WRONG_ISSUER_TOKEN>",
     "wrong_audience": "<WRONG_AUDIENCE_TOKEN>",
@@ -17,11 +18,11 @@ INVALID_TOKENS = {
 }
 
 @pytest.fixture
-def headers():
+def headers() -> Dict[str, str]:
     return {"Authorization": f"Bearer {VALID_TOKEN}", "Content-Type": "application/json"}
 
 @pytest.mark.asyncio
-async def test_health_check_and_summary(headers):
+async def test_health_check_and_summary(headers: Dict[str, str]) -> None:
     """INT-02: Kiểm tra health_check và linux://system/summary"""
     async with httpx.AsyncClient(verify=False) as client:
         # Giả định endpoint health và summary
@@ -37,7 +38,7 @@ async def test_health_check_and_summary(headers):
         assert "os" in summary_res.json()
 
 @pytest.mark.asyncio
-async def test_mcp_tools_invocation(headers):
+async def test_mcp_tools_invocation(headers: Dict[str, str]) -> None:
     """INT-01 & INT-02: Test gọi 4 tools cơ bản qua Streamable HTTP"""
     tools = ["read_log", "get_status", "list_services", "system_metrics"]
     async with httpx.AsyncClient(verify=False) as client:
@@ -53,7 +54,7 @@ async def test_mcp_tools_invocation(headers):
 
 @pytest.mark.parametrize("scenario,token", INVALID_TOKENS.items())
 @pytest.mark.asyncio
-async def test_oauth_negative_cases(scenario, token):
+async def test_oauth_negative_cases(scenario: str, token: str) -> None:
     """SEC-03: Kiểm tra các trường hợp Token lỗi bị từ chối"""
     bad_headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(verify=False) as client:
@@ -61,7 +62,7 @@ async def test_oauth_negative_cases(scenario, token):
         assert res.status_code in [401, 403], f"Bảo mật thất bại ở case: {scenario}"
 
 @pytest.mark.asyncio
-async def test_missing_logs_scope_denied():
+async def test_missing_logs_scope_denied() -> None:
     """SEC-04: Token có mcp.read nhưng thiếu mcp.logs.read bị chặn trước khi gọi journalctl"""
     token_no_log = os.getenv("MCP_TOKEN_NO_LOGS", "<TOKEN_CHUA_CO>")
     headers = {"Authorization": f"Bearer {token_no_log}"}
