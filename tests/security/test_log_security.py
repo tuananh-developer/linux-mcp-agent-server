@@ -14,8 +14,8 @@ def mock_sources() -> dict[str, str]:
 
 
 @patch("linux_mcp_agent.log_reader.shutil.which")
-def test_reject_path_traversal(mock_which: MagicMock, mock_sources: dict[str, str]) -> None:
-    """Đảm bảo hệ thống chặn path traversal bằng cách kiểm tra executable"""
+def test_missing_journalctl_executable(mock_which: MagicMock, mock_sources: dict[str, str]) -> None:
+    """Đảm bảo hệ thống báo lỗi khi đường dẫn cấu hình server-side journalctl không hợp lệ"""
     mock_which.return_value = None
     
     with pytest.raises(LogReadError) as excinfo:
