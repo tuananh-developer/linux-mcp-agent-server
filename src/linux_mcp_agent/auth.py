@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote_plus, urlencode
 from urllib.request import ProxyHandler, Request, build_opener
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
@@ -85,9 +85,9 @@ class KeycloakIntrospectionVerifier(TokenVerifier):
         if cached is not None:
             return cached
         credentials = (
-            f"{self._settings.introspection_client_id}:"
-            f"{self._settings.introspection_client_secret}"
-        ).encode()
+            f"{quote_plus(self._settings.introspection_client_id, safe='')}:"
+            f"{quote_plus(self._settings.introspection_client_secret, safe='')}"
+        ).encode("ascii")
         basic = base64.b64encode(credentials).decode("ascii")
         body = urlencode({"token": token, "token_type_hint": "access_token"}).encode("ascii")
         request = Request(
