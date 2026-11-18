@@ -6,7 +6,7 @@ This document defines the three workstreams and their ownership boundaries. The 
 
 ## Current workstream status — 2026-11-18
 
-- **WS1:** the architecture, SRS, charter, OOAD, MCP contract, core telemetry, ADRs, integration candidate and FR/NFR traceability are maintained on `integration/finalize-ubuntu2404`. Fresh CI on the synchronized candidate and PR review remain required before calling the integration candidate ready.
+- **WS1:** the architecture, SRS, charter, OOAD, MCP contract, core telemetry, ADRs, integration candidate and FR/NFR traceability are maintained on `integration/finalize-ubuntu2404`. GitHub Actions run #44261484804 passed on candidate commit `53fd681faab62938f42fe26261dea92b857f2698`: Ruff, strict Pyright and 97 pytest tests on both Python 3.14 and 3.15, plus Compose validation. PR #11 still requires independent review before it is merged into `team-handoff`; this does not replace WS3's live acceptance.
 - **WS2:** security/infrastructure code is complete and integrated through PRs #4, #13 and #15 on `team-handoff`. This is a code-completion statement only; it does not claim that the Ubuntu deployment or host-level checks have passed.
 - **WS3:** automated security/acceptance scaffolding is present. Live OAuth, HTTPS/LAN, systemd, PostgreSQL persistence and four-tool performance evidence remain outstanding until recorded under `reports/acceptance/`.
 
