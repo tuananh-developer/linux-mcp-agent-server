@@ -19,7 +19,7 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
 
-def _percentile(samples: list[float], percentile: float) -> float | None:
+def calculate_percentile(samples: list[float], percentile: float) -> float | None:
     if not samples:
         return None
     ordered = sorted(samples)
@@ -27,7 +27,7 @@ def _percentile(samples: list[float], percentile: float) -> float | None:
     return round(ordered[rank - 1], 3)
 
 
-def _evaluate_tool(
+def evaluate_tool_acceptance(
     samples_ms: list[float],
     *,
     errors: int,
@@ -38,7 +38,7 @@ def _evaluate_tool(
 ) -> dict[str, Any]:
     successful = len(samples_ms)
     success_rate = (successful / requested_samples) * 100 if requested_samples else 0.0
-    p95 = _percentile(samples_ms, 0.95)
+    p95 = calculate_percentile(samples_ms, 0.95)
     reasons: list[str] = []
 
     if successful < minimum_successful_samples:
@@ -119,7 +119,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
                     error_name = type(exc).__name__
                     error_types[error_name] = error_types.get(error_name, 0) + 1
 
-            acceptance = _evaluate_tool(
+            acceptance = evaluate_tool_acceptance(
                 samples_ms,
                 errors=errors,
                 requested_samples=args.iterations,
@@ -132,9 +132,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
                 "successfulSamples": len(samples_ms),
                 "errors": errors,
                 "errorTypes": error_types,
-                "p50Ms": _percentile(samples_ms, 0.50),
-                "p95Ms": _percentile(samples_ms, 0.95),
-                "p99Ms": _percentile(samples_ms, 0.99),
+                "p50Ms": calculate_percentile(samples_ms, 0.50),
+                "p95Ms": calculate_percentile(samples_ms, 0.95),
+                "p99Ms": calculate_percentile(samples_ms, 0.99),
                 "minMs": round(min(samples_ms), 3) if samples_ms else None,
                 "maxMs": round(max(samples_ms), 3) if samples_ms else None,
                 "meanMs": round(statistics.fmean(samples_ms), 3) if samples_ms else None,
