@@ -1,6 +1,7 @@
 import os
-import pytest
+
 import httpx
+import pytest
 
 LIVE_HOST: str = os.getenv("MCP_LIVE_HOST", "https://<IP_CHUA_CO>")
 VALID_TOKEN: str = os.getenv("MCP_VALID_TOKEN", "<TOKEN_CHUA_CO>")
