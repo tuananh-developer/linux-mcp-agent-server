@@ -37,6 +37,8 @@ dev = [
   "pytest-asyncio==1.4.1",
   "pyright==1.1.414",
   "ruff==0.17.3",
+  "httpx>=0.28.1",
+  "numpy>=2.5.5",
 ]
 
 [tool.hatch.build]

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from __future__ import annotations
 
 import argparse
@@ -182,3 +183,58 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+=======
+import asyncio
+import time
+import json
+import os
+import httpx
+import numpy as np
+
+LIVE_HOST = os.getenv("MCP_LIVE_HOST", "https://<IP_CHUA_CO>")
+VALID_TOKEN = os.getenv("MCP_VALID_TOKEN", "<TOKEN_CHUA_CO>")
+TOOLS_TO_TEST = ["read_log", "get_status", "list_services", "system_metrics"]
+ITERATIONS = 50 # Số lần test mỗi tool
+
+async def benchmark_tool(tool_name, client, headers):
+    latencies = []
+    success_count = 0
+    error_count = 0
+    
+    for _ in range(ITERATIONS):
+        start_time = time.perf_counter()
+        res = await client.post(f"{LIVE_HOST}/mcp", headers=headers, json={"method": f"tools/{tool_name}"})
+        end_time = time.perf_counter()
+        
+        latencies.append((end_time - start_time) * 1000) # milliseconds
+        if res.status_code == 200:
+            success_count += 1
+        else:
+            error_count += 1
+            
+    return {
+        "tool": tool_name,
+        "success": success_count,
+        "errors": error_count,
+        "p50_ms": round(np.percentile(latencies, 50), 2),
+        "p95_ms": round(np.percentile(latencies, 95), 2),
+        "p99_ms": round(np.percentile(latencies, 99), 2),
+        "pass_target": np.percentile(latencies, 95) < 2000
+    }
+
+async def run_benchmark():
+    headers = {"Authorization": f"Bearer {VALID_TOKEN}"}
+    results = []
+    async with httpx.AsyncClient(verify=False) as client:
+        for tool in TOOLS_TO_TEST:
+            print(f"Benchmarking {tool}...")
+            result = await benchmark_tool(tool, client, headers)
+            results.append(result)
+            
+    with open("benchmark.json", "w") as f:
+        json.dump(results, f, indent=4)
+    print("Benchmark complete. Result saved to benchmark.json")
+
+if __name__ == "__main__":
+    asyncio.run(run_benchmark())
+>>>>>>> 8fe752d (chore: save local changes before pulling team-handoff)
