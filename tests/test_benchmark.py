@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from scripts.benchmark_mcp import _evaluate_tool, _percentile
+from scripts.benchmark_mcp import evaluate_tool_acceptance, calculate_percentile
 
 
-def test_percentile_uses_nearest_rank() -> None:
-    assert _percentile([40.0, 10.0, 30.0, 20.0], 0.95) == 40.0
+def testcalculate_percentile_uses_nearest_rank() -> None:
+    assert calculate_percentile([40.0, 10.0, 30.0, 20.0], 0.95) == 40.0
 
 
 def test_tool_acceptance_requires_complete_success_and_target_p95() -> None:
-    result = _evaluate_tool(
+    result = evaluate_tool_acceptance(
         [100.0, 200.0, 300.0, 400.0],
         errors=0,
         requested_samples=4,
@@ -24,7 +24,7 @@ def test_tool_acceptance_requires_complete_success_and_target_p95() -> None:
 
 
 def test_tool_acceptance_fails_when_any_request_errors() -> None:
-    result = _evaluate_tool(
+    result = evaluate_tool_acceptance(
         [100.0, 200.0, 300.0],
         errors=1,
         requested_samples=4,
@@ -39,7 +39,7 @@ def test_tool_acceptance_fails_when_any_request_errors() -> None:
 
 
 def test_tool_acceptance_fails_when_p95_exceeds_target() -> None:
-    result = _evaluate_tool(
+    result = evaluate_tool_acceptance(
         [100.0, 3000.0],
         errors=0,
         requested_samples=2,
