@@ -409,6 +409,34 @@ def run_acceptance_demo(client: StreamableHttpMcpClient) -> tuple[int, int]:
             passed += 1
             print("PASS: All 4 required tools are registered")
 
+    resources_list = record("Resources discovery", lambda: client.rpc("resources/list"))
+    if resources_list is not None:
+        resource_uris = {
+            item.get("uri")
+            for item in resources_list.get("resources", [])
+            if isinstance(item, dict) and isinstance(item.get("uri"), str)
+        }
+        print("Discovered resources: " + ", ".join(sorted(resource_uris)))
+        if "linux://system/summary" in resource_uris:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL: Required resource linux://system/summary was not advertised")
+
+    prompts_list = record("Prompts discovery", lambda: client.rpc("prompts/list"))
+    if prompts_list is not None:
+        prompt_names = {
+            item.get("name")
+            for item in prompts_list.get("prompts", [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        }
+        print("Discovered prompts: " + ", ".join(sorted(prompt_names)))
+        if "health_check" in prompt_names:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL: Required prompt health_check was not advertised")
+
     calls = [
         ("get_system_metrics", {}),
         ("get_disk_usage", {}),
