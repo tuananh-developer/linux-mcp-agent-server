@@ -12,12 +12,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from linux_mcp_agent.benchmark import calculate_percentile, evaluate_tool_acceptance
 
 import httpx2
 import psutil
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
+
+from linux_mcp_agent.benchmark import calculate_percentile, evaluate_tool_acceptance
 
 
 def _tool_specs(log_alias: str | None, log_lines: int) -> list[tuple[str, dict[str, Any]]]:
