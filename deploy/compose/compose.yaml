@@ -48,7 +48,7 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
     healthcheck:
-      # Keycloak's management interface listens on 9000 inside the container.
+      # The Keycloak management interface listens on port 9000 inside the container.
       # The image does not include curl; use the documented Bash TCP probe.
       test: ["CMD", "/bin/bash", "-c", "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep -q 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
       interval: 10s
@@ -62,6 +62,7 @@ services:
         condition: service_healthy
     networks:
       - identity-backend
+      - keycloak-host-access
     security_opt:
       - no-new-privileges:true
 
@@ -90,6 +91,8 @@ services:
 networks:
   identity-backend:
     internal: true
+  keycloak-host-access:
+    driver: bridge
 
 volumes:
   keycloak-postgres:
