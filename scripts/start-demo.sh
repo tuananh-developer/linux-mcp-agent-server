@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_DIR="$ROOT/deploy/compose"
 COMPOSE_FILE="$COMPOSE_DIR/compose.yaml"
-COMPOSE_ENV_FILE="\${LINUX_MCP_COMPOSE_ENV_FILE:-$COMPOSE_DIR/.env}"
-MCP_PORT="\${MCP_PORT:-3002}"
+COMPOSE_ENV_FILE="${LINUX_MCP_COMPOSE_ENV_FILE:-$COMPOSE_DIR/.env}"
+MCP_PORT="${MCP_PORT:-3002}"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -14,7 +14,7 @@ fail() {
 
 wait_for_keycloak() {
   local container_id status
-  container_id="$("\${compose[@]}" ps -q keycloak)"
+  container_id="$("${compose[@]}" ps -q keycloak)"
   [[ -n "$container_id" ]] || fail "Keycloak container was not created."
 
   printf 'Waiting for Keycloak health check'
@@ -27,7 +27,7 @@ wait_for_keycloak() {
         ;;
       unhealthy|exited|dead)
         printf '\n'
-        "\${compose[@]}" logs --tail=60 keycloak >&2
+        "${compose[@]}" logs --tail=60 keycloak >&2
         fail "Keycloak is $status. Check the logs above."
         ;;
     esac
@@ -35,12 +35,12 @@ wait_for_keycloak() {
     sleep 2
   done
   printf '\n'
-  "\${compose[@]}" logs --tail=60 keycloak >&2
+  "${compose[@]}" logs --tail=60 keycloak >&2
   fail "Timed out waiting for Keycloak to become healthy."
 }
 
 wait_for_mcp() {
-  local url="http://127.0.0.1:\${MCP_PORT}/healthz"
+  local url="http://127.0.0.1:${MCP_PORT}/healthz"
   printf 'Waiting for MCP health check'
   for _ in $(seq 1 30); do
     if curl --silent --show-error --fail "$url" >/dev/null 2>&1; then
@@ -62,12 +62,12 @@ compose=(docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE")
 cd "$ROOT"
 
 printf '== 1/3 Start PostgreSQL and Keycloak ==\n'
-"\${compose[@]}" config --quiet
-"\${compose[@]}" up -d postgres keycloak
+"${compose[@]}" config --quiet
+"${compose[@]}" up -d postgres keycloak
 wait_for_keycloak
 
 printf '\n== 2/3 Start Caddy HTTPS ingress ==\n'
-"\${compose[@]}" --profile lan up -d caddy
+"${compose[@]}" --profile lan up -d caddy
 
 printf '\n== 3/3 Ensure the MCP application is running ==\n'
 if wait_for_mcp; then
@@ -87,7 +87,7 @@ if command -v systemctl >/dev/null 2>&1 && systemctl cat linux-mcp-agent.service
   exit 0
 fi
 
-SERVER_ENV_FILE="\${LINUX_MCP_SERVER_ENV_FILE:-}"
+SERVER_ENV_FILE="${LINUX_MCP_SERVER_ENV_FILE:-}"
 if [[ -z "$SERVER_ENV_FILE" ]]; then
   for candidate in "$HOME/.config/linux-mcp-agent/server.env" "/etc/linux-mcp-agent/server.env"; do
     if [[ -r "$candidate" ]]; then
@@ -109,9 +109,9 @@ set -a
 source "$SERVER_ENV_FILE"
 set +a
 
-[[ "\${AUTH_MODE:-}" == "keycloak" ]] || fail "Server environment must set AUTH_MODE=keycloak."
-MCP_PORT="\${MCP_PORT:-3002}"
-if [[ ! -f "\${LOG_SOURCES_FILE:-}" && -f "$ROOT/config/log-sources.example.json" ]]; then
+[[ "${AUTH_MODE:-}" == "keycloak" ]] || fail "Server environment must set AUTH_MODE=keycloak."
+MCP_PORT="${MCP_PORT:-3002}"
+if [[ ! -f "${LOG_SOURCES_FILE:-}" && -f "$ROOT/config/log-sources.example.json" ]]; then
   export LOG_SOURCES_FILE="$ROOT/config/log-sources.example.json"
 fi
 
