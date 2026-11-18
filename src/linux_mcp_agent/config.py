@@ -111,6 +111,10 @@ class Settings:
         audience = _require_https_url(
             "MCP_REQUIRED_AUDIENCE", os.getenv("MCP_REQUIRED_AUDIENCE", resource_uri)
         )
+        if audience != resource_uri:
+            raise ConfigurationError(
+                "MCP_REQUIRED_AUDIENCE must equal MCP_RESOURCE_URI after normalization"
+            )
         allowed_disks = _csv(os.getenv("ALLOWED_DISK_PATHS"), ("/",))
         if not allowed_disks or any(
             not Path(path).is_absolute() or ".." in Path(path).parts for path in allowed_disks
