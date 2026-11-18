@@ -145,7 +145,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Measure MCP tool latency over Streamable HTTP.")
     parser.add_argument(
         "--url",
-        default=os.getenv("MCP_BENCHMARK_URL", "http://127.0.0.1:3000/mcp"),
+        default=os.getenv("MCP_BENCHMARK_URL", "http://127.0.0.1:3002/mcp"),
         help="MCP Streamable HTTP endpoint URL",
     )
     parser.add_argument("--iterations", type=int, default=50)

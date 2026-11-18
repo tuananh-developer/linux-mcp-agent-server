@@ -74,7 +74,7 @@ class Settings:
             raise ConfigurationError("MCP_HOST must be loopback; expose LAN traffic through Caddy")
 
         try:
-            port = int(os.getenv("MCP_PORT", "3000"))
+            port = int(os.getenv("MCP_PORT", "3002"))
             timeout = float(os.getenv("JOURNALCTL_TIMEOUT_SECONDS", "1.5"))
             max_bytes = int(os.getenv("MAX_LOG_OUTPUT_BYTES", "65536"))
             cache_ttl = float(os.getenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30.0"))
@@ -145,7 +145,7 @@ class Settings:
             public_url=public_url,
             allowed_hosts=_csv(
                 os.getenv("MCP_ALLOWED_HOSTS"),
-                ("127.0.0.1:3000", "localhost:3000", "mcp.home.arpa", "mcp.home.arpa:443"),
+                ("127.0.0.1:3002", "localhost:3002", "mcp.home.arpa", "mcp.home.arpa:443"),
             ),
             allowed_origins=_csv(os.getenv("MCP_ALLOWED_ORIGINS")),
             issuer_url=issuer,

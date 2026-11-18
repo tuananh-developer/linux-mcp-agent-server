@@ -65,13 +65,13 @@ The Caddy internal CA root certificate must be installed in each trusted MCP cli
 
 ## Network exposure
 
-- MCP backend: `127.0.0.1:3000`.
+- MCP backend: `127.0.0.1:3002`.
 - Keycloak HTTP: `127.0.0.1:8080`.
 - PostgreSQL: private Docker network only; no host port.
 - Caddy: host network, intended LAN ingress on HTTPS only.
 - Keycloak management/health port 9000: container-internal; not published to the host or LAN.
 
-Firewall policy should allow TCP 443 only from the selected demo subnet/client addresses. Do not expose 3000, 8080 or 5432.
+Firewall policy should allow TCP 443 only from the selected demo subnet/client addresses. Do not expose 3002, 8080 or 5432.
 
 ## Residual risks and acceptance
 
@@ -80,3 +80,7 @@ Keycloak Resource Indicators are marked experimental in the pinned Keycloak vers
 Membership in `systemd-journal` provides broader OS-level journal visibility than the MCP alias list. The application enforces the allowlist and bounded reader, but this residual service-account privilege must be reviewed on the acceptance host.
 
 Before enabling LAN ingress, verify a real token's `iss`, `aud`, scopes and introspection result; verify TLS trust from a second device; verify admin routes are unavailable from LAN; and record the evidence and limitations.
+
+## Browser assistant
+
+The dashboard shell and static assets are public. The browser uses `/mcp` for host data, and the model gateway applies the configured Host, Origin and base scope checks. Journal reads remain subject to the MCP log scope. The Bearer token is held in tab memory.

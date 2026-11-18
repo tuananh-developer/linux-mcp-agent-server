@@ -77,13 +77,13 @@ Set at least:
 - Resource-server client ID and secret
 - Allowed disk paths and log-source aliases
 
-The service must bind to `127.0.0.1:3000`. Start it and verify locally:
+The service must bind to `127.0.0.1:3002`. Keep `MCP_RESOURCE_URI` and `MCP_REQUIRED_AUDIENCE` equal after normalization. To enable the AI assistant, configure the model provider in the server environment as described in [the README](../README.md). Start the service and verify locally:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now linux-mcp-agent
 sudo systemctl status linux-mcp-agent
-curl -fsS http://127.0.0.1:3000/healthz
+curl -fsS http://127.0.0.1:3002/healthz
 ```
 
 Before proceeding, run a real authorized MCP Client request from the server host and verify that an invalid token is rejected.
@@ -105,13 +105,13 @@ Distribute only the Caddy root certificate to authorized clients. Never copy the
 ## 6. Verify network and security boundaries
 
 ```bash
-ss -lntp | grep -E ':(443|3000|8080|5432|9000)\\b'
+ss -lntp | grep -E ':(443|3002|8080|5432|9000)\\b'
 systemctl show linux-mcp-agent -p User,Group,SupplementaryGroups
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml ps
 ```
 
 Expected:
-- 3000 and 8080 bound to loopback only.
+- 3002 and 8080 bound to loopback only.
 - PostgreSQL 5432 is not published.
 - Keycloak management 9000 is not published.
 - Only intended HTTPS ingress is reachable from the LAN.

@@ -52,7 +52,7 @@ docker compose --env-file .env -f compose.yaml --profile lan up -d caddy
 ## Verify exposure
 
 ```bash
-ss -lntp | grep -E ':(443|3000|8080|5432|9000)\\b'
+ss -lntp | grep -E ':(443|3002|8080|5432|9000)\\b'
 ```
 
-MCP 3000 and Keycloak 8080 must remain loopback-only. PostgreSQL 5432 and Keycloak management 9000 must not be published. Only Caddy's intended HTTPS ingress should be reachable from the demo LAN.
+MCP 3002 and Keycloak 8080 must remain loopback-only. PostgreSQL 5432 and Keycloak management 9000 must not be published. Only Caddy's intended HTTPS ingress should be reachable from the demo LAN.

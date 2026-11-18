@@ -39,6 +39,10 @@ The MCP application is not containerized. The Compose stack does not contain an 
 - `log_reader.py`: alias allowlist, bounded journalctl process execution, JSON parsing and best-effort redaction.
 - `__main__.py`: logging setup and Uvicorn entry point.
 
+## Browser assistant
+
+The browser opens an MCP session and invokes model-selected tools using the same access controls as external clients. The model gateway supports OpenAI and local Ollama. See [LLM agent integration](06_llm_agent_integration.md) for configuration and data flow.
+
 ## Request flow
 
 1. The external MCP Client obtains an access token from Keycloak using the separately configured client flow.
@@ -51,7 +55,7 @@ The MCP application is not containerized. The Compose stack does not contain an 
 ## Trust boundaries and network exposure
 
 - Caddy is the only intended LAN-facing service and uses an internal CA.
-- MCP listens on `127.0.0.1:3000`; Keycloak's application listener is published only at `127.0.0.1:8080`.
+- MCP listens on `127.0.0.1:3002`; Keycloak's application listener is published only at `127.0.0.1:8080`.
 - PostgreSQL is on an internal Docker network and has no published host port.
 - Keycloak administration is available only from loopback. LAN routes expose only the configured OIDC discovery, token and signing-key endpoints.
 - The introspection endpoint is private to the MCP host and is not published through Caddy.

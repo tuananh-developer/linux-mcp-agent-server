@@ -47,9 +47,9 @@ def test_settings_default_to_local_loopback(monkeypatch: pytest.MonkeyPatch) -> 
     settings = Settings.from_env()
     assert settings.auth_mode == "disabled"
     assert settings.host == "127.0.0.1"
-    assert settings.port == 3000
-    assert "127.0.0.1:3000" in settings.allowed_hosts
-    assert "localhost:3000" in settings.allowed_hosts
+    assert settings.port == 3002
+    assert "127.0.0.1:3002" in settings.allowed_hosts
+    assert "localhost:3002" in settings.allowed_hosts
     assert settings.allowed_disk_paths == ("/",)
     assert settings.log_level == "INFO"
 
@@ -75,11 +75,11 @@ def test_rejects_invalid_disk_paths(monkeypatch: pytest.MonkeyPatch, paths: str)
 
 
 def test_parses_hosts_origins_and_disk_paths(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MCP_ALLOWED_HOSTS", "localhost:3000, mcp.example.test")
+    monkeypatch.setenv("MCP_ALLOWED_HOSTS", "localhost:3002, mcp.example.test")
     monkeypatch.setenv("MCP_ALLOWED_ORIGINS", "https://agent.example.test")
     monkeypatch.setenv("ALLOWED_DISK_PATHS", "/,/home")
     settings = Settings.from_env()
-    assert settings.allowed_hosts == ("localhost:3000", "mcp.example.test")
+    assert settings.allowed_hosts == ("localhost:3002", "mcp.example.test")
     assert settings.allowed_origins == ("https://agent.example.test",)
     assert settings.allowed_disk_paths == ("/", "/home")
 

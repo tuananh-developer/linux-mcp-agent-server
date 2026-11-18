@@ -16,6 +16,7 @@ Deliver a secure, read-only Linux observability MCP server that exposes selected
 
 - Official MCP Python SDK 2.x and Streamable HTTP at `/mcp`.
 - Four MCP Tools, one MCP Resource and one MCP Prompt.
+- Optional AI chat interface that observes host data through the MCP service.
 - Linux CPU, memory, load, uptime, allowlisted disk capacity, bounded process information and allowlisted journald entries.
 - Keycloak OAuth2/OIDC resource-server validation with exact issuer, expiry, resource/audience and least-privilege scopes.
 - Caddy internal TLS, PostgreSQL for Keycloak persistence, Docker Compose for supporting infrastructure, and a native systemd service for the MCP application.
