@@ -1,6 +1,6 @@
 # Live MCP demo runbook
 
-This runbook demonstrates the deployed MCP server itself: Keycloak client-credentials authentication, Streamable HTTP initialization, all four read-only tools, the system summary resource, and the health-check prompt. It does not invoke an LLM or claim to demonstrate an external Agent runtime.
+This runbook demonstrates the deployed MCP server itself: Keycloak client-credentials authentication, Streamable HTTP initialization, all eight read-only tools, the system summary resource, and the health-check prompt. It does not invoke an LLM or claim to demonstrate an external Agent runtime.
 
 ## 1. Prepare the local configuration once
 
@@ -53,12 +53,12 @@ Open terminal 2 at the repository root:
 
     uv run python scripts/demo_live.py
 
-The client obtains a short-lived Keycloak token using the resource indicator https://mcp.home.arpa/mcp, then performs the following live requests:
+Ensure the configured ALLOWED_SYSTEMD_UNITS contains ssh.service (or adjust the demo call in scripts/demo_live.py to a unit you intentionally allow). The client obtains a short-lived Keycloak token using the resource indicator https://mcp.home.arpa/mcp, then performs the following live requests:
 
 1. MCP initialize and notifications/initialized.
-2. tools/list, then calls get_system_metrics, get_disk_usage, list_processes, and read_allowed_log.
-3. resources/list and resources/read for linux://system/summary.
-4. prompts/list and prompts/get for health_check.
+2. tools/list, then calls get_system_metrics, get_disk_usage, list_processes, read_allowed_log, get_network_stats, get_service_status, check_port, and get_system_alerts.
+3. resources/list and resources/read for linux://system/summary (including network counters).
+4. prompts/list and prompts/get for health_check (overview or the network, services and alerts focus).
 
 The access token is held in memory only. The script does not print or save the token or client secret.
 
