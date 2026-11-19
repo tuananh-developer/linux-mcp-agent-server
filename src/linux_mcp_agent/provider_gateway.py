@@ -250,22 +250,31 @@ class ProviderGateway:
                 for item in tools
             ]
         result = self._request("POST", "/chat/completions", payload)
-        choices = result.get("choices")
-        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        choices_raw = result.get("choices")
+        if not isinstance(choices_raw, list):
             raise AgentError("OpenAI không trả về lựa chọn phản hồi.")
-        message = choices[0].get("message")
-        if not isinstance(message, dict):
+        choices = cast(list[Any], choices_raw)
+        if not choices or not isinstance(choices[0], dict):
+            raise AgentError("OpenAI không trả về lựa chọn phản hồi.")
+        choice = cast(dict[str, Any], choices[0])
+        message_raw = choice.get("message")
+        if not isinstance(message_raw, dict):
             raise AgentError("OpenAI trả về message không hợp lệ.")
+        message = cast(dict[str, Any], message_raw)
         content = message.get("content") or ""
         if not isinstance(content, str):
             content = ""
         calls: list[dict[str, Any]] = []
-        raw_calls = message.get("tool_calls", [])
-        if not isinstance(raw_calls, list) or len(raw_calls) > 4:
+        raw_calls_value = message.get("tool_calls", [])
+        if not isinstance(raw_calls_value, list):
+            raise AgentError("OpenAI trả về tool call không hợp lệ.")
+        raw_calls = cast(list[Any], raw_calls_value)
+        if len(raw_calls) > 4:
             raise AgentError("OpenAI trả về quá nhiều tool call.")
         for index, raw_call in enumerate(raw_calls):
             if not isinstance(raw_call, dict) or not isinstance(raw_call.get("function"), dict):
                 raise AgentError("OpenAI trả về tool call không hợp lệ.")
+            raw_call = cast(dict[str, Any], raw_call)
             function = cast(dict[str, Any], raw_call["function"])
             raw_args = function.get("arguments", "{}")
             try:
@@ -331,30 +340,38 @@ class ProviderGateway:
         result = self._request(
             "POST", f"/models/{quote(self.settings.model, safe='')}:generateContent", payload,
         )
-        candidates = result.get("candidates")
-        if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], dict):
+        candidates_raw = result.get("candidates")
+        if not isinstance(candidates_raw, list):
             raise AgentError("Gemini không trả về candidate.")
-        candidate = candidates[0]
-        response_content = candidate.get("content", {})
-        if not isinstance(response_content, dict):
+        candidates = cast(list[Any], candidates_raw)
+        if not candidates or not isinstance(candidates[0], dict):
+            raise AgentError("Gemini không trả về candidate.")
+        candidate = cast(dict[str, Any], candidates[0])
+        response_content_raw = candidate.get("content", {})
+        if not isinstance(response_content_raw, dict):
             raise AgentError("Gemini trả về content không hợp lệ.")
-        parts = response_content.get("parts", [])
-        if not isinstance(parts, list):
+        response_content = cast(dict[str, Any], response_content_raw)
+        parts_raw = response_content.get("parts", [])
+        if not isinstance(parts_raw, list):
             raise AgentError("Gemini trả về parts không hợp lệ.")
+        parts = cast(list[Any], parts_raw)
         texts: list[str] = []
         calls: list[dict[str, Any]] = []
-        for index, part in enumerate(parts):
-            if not isinstance(part, dict):
+        for index, part_raw in enumerate(parts):
+            if not isinstance(part_raw, dict):
                 continue
-            if isinstance(part.get("text"), str):
-                texts.append(part["text"])
-            function = part.get("functionCall")
-            if isinstance(function, dict):
-                calls.append(self._tool_call(
-                    str(function.get("name", "")),
-                    function.get("args", {}),
-                    f"gemini_{index}",
-                ))
+            part = cast(dict[str, Any], part_raw)
+            part_text = part.get("text")
+            if isinstance(part_text, str):
+                texts.append(part_text)
+            function_raw = part.get("functionCall")
+            if isinstance(function_raw, dict):
+                function = cast(dict[str, Any], function_raw)
+                function_name = function.get("name")
+                if not isinstance(function_name, str):
+                    raise AgentError("Gemini trả về function call không hợp lệ.")
+                function_args: object = function.get("args", {})
+                calls.append(self._tool_call(function_name, function_args, f"gemini_{index}"))
         normalized = clean_messages([{
             "role": "assistant",
             "content": "\n".join(texts),
@@ -416,22 +433,28 @@ class ProviderGateway:
         if tools:
             payload["tools"] = self._tool_defs(tools)
         result = self._request("POST", "/messages", payload)
-        blocks = result.get("content")
-        if not isinstance(blocks, list):
+        blocks_raw = result.get("content")
+        if not isinstance(blocks_raw, list):
             raise AgentError("Anthropic không trả về content hợp lệ.")
+        blocks = cast(list[Any], blocks_raw)
         texts: list[str] = []
         calls: list[dict[str, Any]] = []
-        for index, block in enumerate(blocks):
-            if not isinstance(block, dict):
+        for index, block_raw in enumerate(blocks):
+            if not isinstance(block_raw, dict):
                 continue
-            if block.get("type") == "text" and isinstance(block.get("text"), str):
-                texts.append(block["text"])
+            block = cast(dict[str, Any], block_raw)
+            block_text = block.get("text")
+            if block.get("type") == "text" and isinstance(block_text, str):
+                texts.append(block_text)
             elif block.get("type") == "tool_use":
-                calls.append(self._tool_call(
-                    str(block.get("name", "")),
-                    block.get("input", {}),
-                    str(block.get("id") or f"anthropic_{index}"),
-                ))
+                function_name = block.get("name")
+                if not isinstance(function_name, str):
+                    raise AgentError("Anthropic trả về tool use không hợp lệ.")
+                function_args: object = block.get("input", {})
+                call_id = block.get("id")
+                if not isinstance(call_id, str):
+                    call_id = f"anthropic_{index}"
+                calls.append(self._tool_call(function_name, function_args, call_id))
         normalized = clean_messages([{
             "role": "assistant",
             "content": "\n".join(texts),
@@ -491,19 +514,29 @@ class ProviderGateway:
         content = message.get("content", "")
         if not isinstance(content, str):
             content = ""
-        raw_calls = message.get("tool_calls", [])
-        if not isinstance(raw_calls, list) or len(raw_calls) > 4:
+        raw_calls_value = message.get("tool_calls", [])
+        if not isinstance(raw_calls_value, list):
+            raise AgentError("Ollama trả về tool call không hợp lệ.")
+        raw_calls = cast(list[Any], raw_calls_value)
+        if len(raw_calls) > 4:
             raise AgentError("Ollama trả về quá nhiều tool call.")
         calls: list[dict[str, Any]] = []
-        for index, raw_call in enumerate(raw_calls):
-            if not isinstance(raw_call, dict) or not isinstance(raw_call.get("function"), dict):
+        for index, raw_call_value in enumerate(raw_calls):
+            if not isinstance(raw_call_value, dict):
                 raise AgentError("Ollama trả về tool call không hợp lệ.")
-            function = cast(dict[str, Any], raw_call["function"])
-            calls.append(self._tool_call(
-                str(function.get("name", "")),
-                function.get("arguments", {}),
-                str(raw_call.get("id") or f"ollama_{index}"),
-            ))
+            raw_call = cast(dict[str, Any], raw_call_value)
+            function_raw = raw_call.get("function")
+            if not isinstance(function_raw, dict):
+                raise AgentError("Ollama trả về tool call không hợp lệ.")
+            function = cast(dict[str, Any], function_raw)
+            function_name = function.get("name")
+            if not isinstance(function_name, str):
+                raise AgentError("Ollama trả về tool call không hợp lệ.")
+            function_args: object = function.get("arguments", {})
+            call_id = raw_call.get("id")
+            if not isinstance(call_id, str):
+                call_id = f"ollama_{index}"
+            calls.append(self._tool_call(function_name, function_args, call_id))
         normalized = clean_messages([{"role": "assistant", "content": content, "tool_calls": calls}])[0]
         return {
             "message": normalized,
