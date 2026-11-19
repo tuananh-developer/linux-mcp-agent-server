@@ -366,6 +366,80 @@ main { padding-inline: var(--gutter); }
 .privacy summary:hover { color: var(--text); }
 .privacy p { margin: 0 0 8px; }
 
+.provider-settings {
+  margin: 14px 0 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.provider-heading, .provider-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+}
+.provider-heading h2 { margin: 0; font-size: 15px; }
+.provider-heading p, .provider-help {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.provider-memory {
+  padding: 5px 8px;
+  border: 1px solid #38675c;
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.provider-grid > div { min-width: 0; }
+.provider-grid label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.provider-grid input, .provider-grid select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #607680;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+.provider-grid input:focus-visible, .provider-grid select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.provider-wide { grid-column: 1 / -1; }
+.provider-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.provider-actions > p {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.provider-actions > p[data-state="success"] { color: var(--accent); }
+.provider-actions > p[data-state="error"] { color: var(--warning); }
+.provider-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.provider-actions .button { min-height: 40px; }
+
 dialog {
   width: min(100% - 32px, 500px);
   max-height: calc(100dvh - 32px);
