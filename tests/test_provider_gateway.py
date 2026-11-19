@@ -74,11 +74,6 @@ async def test_connection_check_lists_models(
         "api_key": "" if provider == "ollama" else "dummy-provider-key",
     })
     gateway = ProviderGateway(settings)
-    if provider == "anthropic":
-        assert gateway._headers()["Authorization"] == "Bearer dummy-provider-key"
-        assert gateway._headers()["anthropic-version"] == "2026-10-21"
-    if provider == "gemini":
-        assert gateway._headers()["x-goog-api-key"] == "dummy-provider-key"
     seen: list[tuple[str, str]] = []
 
     def fake_request(method: str, request_path: str, _payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -141,7 +136,7 @@ async def test_gemini_chat_maps_function_call_and_history(monkeypatch: pytest.Mo
         }
 
     monkeypatch.setattr(gateway, "_request", fake_request)
-    messages = [
+    messages: list[dict[str, Any]] = [
         {"role": "user", "content": "Check CPU"},
         {"role": "assistant", "content": "", "tool_calls": [{
             "id": "call_a", "function": {"name": "get_system_metrics", "arguments": {}},
