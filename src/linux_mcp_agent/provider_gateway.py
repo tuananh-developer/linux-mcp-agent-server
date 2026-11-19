@@ -306,12 +306,13 @@ class ProviderGateway:
                     response = {"text": str(message["content"])}
                 if not isinstance(response, dict):
                     response = {"result": response}
-                call_id = message.get("tool_call_id")
-                if not call_id:
-                    call_id = f"gemini_{index}"
-                contents.append({"role": "user", "parts": [{
-                    "functionResponse": {"name": message["tool_name"], "response": response}
-                }]})
+                part = {"functionResponse": {"name": message["tool_name"], "response": response}}
+                if contents and contents[-1].get("role") == "user" and contents[-1].get("_tool_results") is True:
+                    cast(list[Any], contents[-1]["parts"]).append(part)
+                else:
+                    contents.append({"role": "user", "parts": [part], "_tool_results": True})
+        for content in contents:
+            content.pop("_tool_results", None)
         return contents
 
     def _chat_gemini(
