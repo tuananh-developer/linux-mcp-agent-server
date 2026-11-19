@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any, cast
