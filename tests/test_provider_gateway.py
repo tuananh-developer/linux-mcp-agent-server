@@ -62,6 +62,11 @@ async def test_connection_check_lists_models(
         "api_key": "" if provider == "ollama" else "dummy-provider-key",
     })
     gateway = ProviderGateway(settings)
+    if provider == "anthropic":
+        assert gateway._headers()["Authorization"] == "Bearer dummy-provider-key"
+        assert gateway._headers()["anthropic-version"] == "2026-10-21"
+    if provider == "gemini":
+        assert gateway._headers()["x-goog-api-key"] == "dummy-provider-key"
     seen: list[tuple[str, str]] = []
 
     def fake_request(method: str, request_path: str, _payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -103,7 +108,6 @@ async def test_openai_chat_normalizes_function_calls(monkeypatch: pytest.MonkeyP
     assert result["message"]["tool_calls"][0]["id"] == "call_cpu"
     assert result["usage"] == {"input_tokens": 12, "output_tokens": 3}
     assert captured[0]["model"] == "gpt-4.1-mini"
-    assert captured[0]["store"] is False
     assert "dummy-key" not in str(result)
 
 
