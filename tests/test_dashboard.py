@@ -41,6 +41,11 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assert "Linux Observatory" in page.text
         assert "Tổng quan hệ thống" in page.text
         assert 'id="cpu-value"' in page.text
+        assert "Tự động cập nhật mỗi 5 giây" in page.text
+        overview_script = await client.get("/dashboard/assets/overview.js")
+        assert overview_script.status_code == 200
+        assert "REFRESH_INTERVAL_MS=5000" in overview_script.text
+        assert "HISTORY_LIMIT=60" in overview_script.text
         assistant = await client.get("/assistant")
         assert assistant.status_code == 200
         assert 'id="chat-form"' in assistant.text
