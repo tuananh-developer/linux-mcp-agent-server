@@ -15,6 +15,7 @@ The MCP SDK owns protocol framing, schema publication and request dispatch. The 
 | auth.py | Adapt Keycloak RFC 7662 introspection to the MCP SDK token-verifier interface. | `KeycloakIntrospectionVerifier` |
 | auth_claims.py | Pure validation and normalization of introspection claims. | `validate_introspection_payload` |
 | system.py | Read CPU, memory, disk and process snapshots. | `get_system_metrics`, `get_disk_usage`, `list_processes`, `system_summary` |
+| diagnostics.py | Read network counters, allowlisted systemd state, loopback TCP listener state and evaluate configured warnings. | `get_network_stats`, `get_service_status`, `check_port`, `get_system_alerts` |
 | log_reader.py | Resolve configured journal aliases and perform bounded, redacted reads. | `load_log_sources`, `read_allowed_log`, `run_journalctl_bounded` |
 | __main__.py | Configure logging and start the ASGI application with Uvicorn. | `main` |
 
