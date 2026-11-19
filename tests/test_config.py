@@ -142,3 +142,51 @@ def test_settings_rejects_invalid_cache_ttl(
     with pytest.raises(ConfigurationError, match="MCP_INTROSPECTION_CACHE_TTL_SECONDS"):
         Settings.from_env()
 
+
+def test_parses_diagnostic_allowlist_and_alert_thresholds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ALLOWED_SYSTEMD_UNITS", "ssh.service, cron.service")
+    monkeypatch.setenv("CPU_WARNING_THRESHOLD_PERCENT", "80")
+    monkeypatch.setenv("MEMORY_WARNING_THRESHOLD_PERCENT", "92.5")
+    monkeypatch.setenv("DISK_WARNING_THRESHOLD_PERCENT", "88")
+    settings = Settings.from_env()
+    assert settings.allowed_systemd_units == ("ssh.service", "cron.service")
+    assert settings.cpu_warning_threshold_percent == 80
+    assert settings.memory_warning_threshold_percent == 92.5
+    assert settings.disk_warning_threshold_percent == 88
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("CPU_WARNING_THRESHOLD_PERCENT", "0"),
+        ("MEMORY_WARNING_THRESHOLD_PERCENT", "101"),
+        ("DISK_WARNING_THRESHOLD_PERCENT", "nan"),
+        ("CPU_WARNING_THRESHOLD_PERCENT", "not-a-number"),
+    ],
+)
+def test_rejects_invalid_alert_thresholds(
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv(key, value)
+    with pytest.raises(ConfigurationError):
+        Settings.from_env()
+
+
+@pytest.mark.parametrize("units", ["../ssh.service", "ssh", "ssh.service;id"])
+def test_rejects_invalid_systemd_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+    units: str,
+) -> None:
+    monkeypatch.setenv("ALLOWED_SYSTEMD_UNITS", units)
+    with pytest.raises(ConfigurationError, match="ALLOWED_SYSTEMD_UNITS"):
+        Settings.from_env()
+
+
+def test_rejects_systemctl_path_traversal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SYSTEMCTL_PATH", "/usr/bin/../bin/systemctl")
+    with pytest.raises(ConfigurationError, match="SYSTEMCTL_PATH"):
+        Settings.from_env()
