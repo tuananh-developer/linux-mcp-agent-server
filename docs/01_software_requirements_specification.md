@@ -49,8 +49,9 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 ### 2.4 Design constraints
 
 - The server is read-only.
-- Client input must not become a shell command, executable path, filesystem path or systemd unit.
-- Disk paths and log aliases are administrator-controlled.
+- Client input must not become a shell command, executable path or arbitrary filesystem path.
+- Disk paths, log aliases and inspectable systemd service units are administrator-controlled.
+- Port checks are limited to one TCP port on loopback; remote hosts and ranges are not accepted.
 - Journal output and other tool results are untrusted data.
 - LLM inference, provider credentials and fallback policy remain outside this repository.
 
@@ -77,12 +78,16 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 | FR-010 | The server shall expose `/healthz` as a separate operational health endpoint. |
 | FR-011 | The server shall require the configured base scope for MCP access and the additional log scope before reading journald. |
 | FR-012 | The server shall return structured, bounded results and safe errors without exposing tokens, client secrets, process command lines or process environment values. |
+| FR-013 | The server shall provide `get_network_stats`, returning at most 64 interfaces with link state and cumulative counters but no interface addresses. |
+| FR-014 | The server shall provide `get_service_status` for exact administrator-allowlisted `.service` units only, using fixed `systemctl show` arguments and a timeout. |
+| FR-015 | The server shall provide `check_port` for one local TCP port on `127.0.0.1`; it shall not accept remote hosts, UDP or port ranges. |
+| FR-016 | The server shall provide `get_system_alerts`, evaluating CPU, memory and allowlisted filesystem utilization against validated administrator-configured warning thresholds. |
 
 ## 4. External interface requirements
 
 ### 4.1 MCP interface
 
-The server shall expose four tools: `get_system_metrics`, `get_disk_usage`, `list_processes` and `read_allowed_log`; one resource: `linux://system/summary`; and one prompt: `health_check`.
+The server shall expose eight tools: `get_system_metrics`, `get_disk_usage`, `list_processes`, `read_allowed_log`, `get_network_stats`, `get_service_status`, `check_port` and `get_system_alerts`; one resource: `linux://system/summary`; and one prompt: `health_check`.
 
 ### 4.2 Authentication interface
 
