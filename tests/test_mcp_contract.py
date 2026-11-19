@@ -61,6 +61,10 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
             "get_disk_usage",
             "list_processes",
             "read_allowed_log",
+            "get_network_stats",
+            "get_service_status",
+            "check_port",
+            "get_system_alerts",
         }
         assert [str(resource.uri) for resource in resources.resources] == [
             "linux://system/summary"
