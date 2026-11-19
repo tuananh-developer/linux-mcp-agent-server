@@ -25,4 +25,4 @@ Start the normal MCP and Caddy deployment, then open https://mcp.home.arpa/ in a
 
 In Keycloak mode, obtain an access token with the MCP resource and mcp.read scope, then use Cấu hình MCP to paste it. The token remains in the current tab only. A separate mcp.logs.read scope is required for the log panel.
 
-The UI refreshes the overview every 15 seconds. Clicking Làm mới requests a new snapshot immediately. The dashboard does not persist telemetry or create a metrics history database; the line chart shows only the most recent samples held in that browser tab.
+The UI refreshes the overview every 5 seconds. Clicking Làm mới requests a new snapshot immediately. The dashboard does not persist telemetry or create a metrics history database; the line chart retains up to 60 samples (about 5 minutes) in that browser tab.
