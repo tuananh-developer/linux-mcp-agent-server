@@ -16,7 +16,11 @@ def test_network_stats_returns_counters_without_addresses(
         bytes_sent=10, bytes_recv=20, packets_sent=3, packets_recv=4,
         errin=0, errout=1, dropin=2, dropout=0,
     )
-    monkeypatch.setattr(diagnostics.psutil, "net_io_counters", lambda pernic: {"eth0": counters})
+    def fake_net_io_counters(*, pernic: bool) -> dict[str, Any]:
+        assert pernic is True
+        return {"eth0": counters}
+
+    monkeypatch.setattr(diagnostics.psutil, "net_io_counters", fake_net_io_counters)
     monkeypatch.setattr(
         diagnostics.psutil,
         "net_if_stats",
@@ -35,10 +39,12 @@ def test_network_stats_returns_counters_without_addresses(
 def test_network_stats_rejects_unknown_interface(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def fake_net_io_counters(*, pernic: bool) -> dict[str, Any]:
+        assert pernic is True
+        return {"eth0": SimpleNamespace()}
+
     monkeypatch.setattr(
-        diagnostics.psutil,
-        "net_io_counters",
-        lambda pernic: {"eth0": SimpleNamespace()},
+        diagnostics.psutil, "net_io_counters", fake_net_io_counters
     )
     with pytest.raises(ValueError, match="Unknown"):
         diagnostics.get_network_stats("wlan0")
@@ -129,11 +135,14 @@ def test_system_alerts_reports_cpu_memory_and_disk_warnings(
             "memoryUsagePercent": 95.0,
         },
     )
+    def fake_get_disk_usage(
+        _mount_points: list[str] | None,
+        _allowed_paths: tuple[str, ...],
+    ) -> dict[str, Any]:
+        return {"filesystems": [{"mountPoint": "/", "usagePercent": 91.0}]}
+
     monkeypatch.setattr(
-        "linux_mcp_agent.system.get_disk_usage",
-        lambda *_args: {
-            "filesystems": [{"mountPoint": "/", "usagePercent": 91.0}],
-        },
+        "linux_mcp_agent.system.get_disk_usage", fake_get_disk_usage
     )
 
     result = diagnostics.get_system_alerts(("/",))
