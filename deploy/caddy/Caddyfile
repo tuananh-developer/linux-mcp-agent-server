@@ -2,7 +2,7 @@
     tls internal
     encode zstd gzip
 
-    @backend path /mcp /.well-known/oauth-protected-resource/mcp / /dashboard /assistant /dashboard/assets/* /agent/status /agent/chat
+    @backend path /mcp /.well-known/oauth-protected-resource/mcp / /dashboard /assistant /dashboard/assets/* /agent/status /agent/chat /agent/test
     handle @backend {
         reverse_proxy 127.0.0.1:3002
     }
