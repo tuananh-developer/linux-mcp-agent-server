@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -56,6 +57,11 @@ class Settings:
     logs_scope: str
     required_audience: str
     allowed_disk_paths: tuple[str, ...]
+    allowed_systemd_units: tuple[str, ...]
+    systemctl_path: str
+    cpu_warning_threshold_percent: float
+    memory_warning_threshold_percent: float
+    disk_warning_threshold_percent: float
     log_sources_file: Path
     journalctl_path: str
     journalctl_timeout_seconds: float
@@ -78,9 +84,12 @@ class Settings:
             timeout = float(os.getenv("JOURNALCTL_TIMEOUT_SECONDS", "1.5"))
             max_bytes = int(os.getenv("MAX_LOG_OUTPUT_BYTES", "65536"))
             cache_ttl = float(os.getenv("MCP_INTROSPECTION_CACHE_TTL_SECONDS", "30.0"))
+            cpu_threshold = float(os.getenv("CPU_WARNING_THRESHOLD_PERCENT", "85"))
+            memory_threshold = float(os.getenv("MEMORY_WARNING_THRESHOLD_PERCENT", "90"))
+            disk_threshold = float(os.getenv("DISK_WARNING_THRESHOLD_PERCENT", "85"))
         except ValueError as exc:
             raise ConfigurationError(
-                "MCP_PORT, JOURNALCTL_TIMEOUT_SECONDS, MAX_LOG_OUTPUT_BYTES and MCP_INTROSPECTION_CACHE_TTL_SECONDS must be numeric"
+                "MCP_PORT, timeout, output-size, cache and alert-threshold settings must be numeric"
             ) from exc
         if not 1 <= port <= 65535:
             raise ConfigurationError("MCP_PORT must be between 1 and 65535")
@@ -90,6 +99,13 @@ class Settings:
             raise ConfigurationError("MAX_LOG_OUTPUT_BYTES must be between 1024 and 262144")
         if not 0.0 <= cache_ttl <= 300.0:
             raise ConfigurationError("MCP_INTROSPECTION_CACHE_TTL_SECONDS must be between 0 and 300")
+        for name, threshold in (
+            ("CPU_WARNING_THRESHOLD_PERCENT", cpu_threshold),
+            ("MEMORY_WARNING_THRESHOLD_PERCENT", memory_threshold),
+            ("DISK_WARNING_THRESHOLD_PERCENT", disk_threshold),
+        ):
+            if not 1.0 <= threshold <= 100.0:
+                raise ConfigurationError(f"{name} must be between 1 and 100")
 
         public_url = _require_https_url(
             "MCP_PUBLIC_URL", os.getenv("MCP_PUBLIC_URL", "https://mcp.home.arpa/mcp")
@@ -137,6 +153,24 @@ class Settings:
         ):
             raise ConfigurationError("JOURNALCTL_PATH must be an absolute path without traversal")
 
+        systemctl_path = os.getenv("SYSTEMCTL_PATH", "/usr/bin/systemctl").strip()
+        if (
+            not systemctl_path
+            or not Path(systemctl_path).is_absolute()
+            or ".." in Path(systemctl_path).parts
+        ):
+            raise ConfigurationError("SYSTEMCTL_PATH must be an absolute path without traversal")
+
+        allowed_systemd_units = _csv(
+            os.getenv("ALLOWED_SYSTEMD_UNITS"),
+            ("ssh.service", "cron.service", "systemd-timesyncd.service"),
+        )
+        if any(
+            not re.fullmatch(r"[A-Za-z0-9_.@:-]{1,128}\.service", unit)
+            for unit in allowed_systemd_units
+        ):
+            raise ConfigurationError("ALLOWED_SYSTEMD_UNITS must contain valid .service unit names")
+
         settings = cls(
             app_env=app_env,
             auth_mode=auth_mode,
@@ -157,6 +191,11 @@ class Settings:
             logs_scope=os.getenv("MCP_LOGS_SCOPE", "mcp.logs.read").strip(),
             required_audience=audience,
             allowed_disk_paths=allowed_disks,
+            allowed_systemd_units=allowed_systemd_units,
+            systemctl_path=systemctl_path,
+            cpu_warning_threshold_percent=cpu_threshold,
+            memory_warning_threshold_percent=memory_threshold,
+            disk_warning_threshold_percent=disk_threshold,
             log_sources_file=Path(
                 os.getenv("LOG_SOURCES_FILE", "config/log-sources.example.json")
             ).expanduser(),
