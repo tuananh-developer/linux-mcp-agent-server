@@ -135,7 +135,7 @@ def get_service_status(
 
 def check_port(port: int, timeout_seconds: float = 0.5) -> dict[str, Any]:
     """Check one local TCP listener; callers cannot select a remote host or scan a range."""
-    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+    if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError("port must be an integer between 1 and 65535")
     if not math.isfinite(timeout_seconds) or not 0.1 <= timeout_seconds <= 2.0:
         raise ValueError("timeout_seconds must be between 0.1 and 2 seconds")
