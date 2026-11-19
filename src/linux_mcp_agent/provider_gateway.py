@@ -38,7 +38,7 @@ class ProviderSettings:
             raise AgentError("Chưa có cấu hình nhà cung cấp AI.")
         raw = cast(dict[str, Any], raw)
         provider = raw.get("provider")
-        if provider not in {"gemini", "openai", "anthropic", "ollama"}:
+        if not isinstance(provider, str) or provider not in {"gemini", "openai", "anthropic", "ollama"}:
             raise AgentError("Nhà cung cấp AI không được hỗ trợ.")
         model = raw.get("model")
         if not isinstance(model, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", model.strip()):
@@ -54,7 +54,10 @@ class ProviderSettings:
         if not isinstance(base_url, str) or len(base_url) > 256:
             raise AgentError("Ollama base URL không hợp lệ.")
         base_url = base_url.strip().rstrip("/")
-        parsed = urlsplit(base_url)
+        try:
+            parsed = urlsplit(base_url)
+        except ValueError:
+            raise AgentError("Ollama base URL không hợp lệ.") from None
         if provider == "ollama":
             if (
                 parsed.scheme != "http"
