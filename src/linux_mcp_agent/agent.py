@@ -202,10 +202,12 @@ class OllamaGateway:
 def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecuritySettings) -> list[Route]:
     config = AgentSettings.from_env()
     from linux_mcp_agent.openai_gateway import OpenAIGateway
+    from linux_mcp_agent.provider_gateway import ProviderGateway, ProviderSettings
 
-    gateway = OpenAIGateway(config) if config.provider == "openai" else OllamaGateway(config)
+    legacy_gateway = OpenAIGateway(config) if config.provider == "openai" else OllamaGateway(config)
     verifier = KeycloakIntrospectionVerifier(settings) if settings.auth_mode == "keycloak" else None
     guard = TransportSecurityMiddleware(security)
+    provider_limit = asyncio.Semaphore(2)
 
     async def authorize(request: Request) -> JSONResponse | None:
         rejected = await guard.validate_request(request, is_post=request.method == "POST")
@@ -220,40 +222,70 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
                 return JSONResponse({"error": "Missing required scope"}, status_code=403)
         return None
 
+    async def read_json_body(request: Request, max_bytes: int) -> dict[str, Any]:
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > max_bytes:
+                raise AgentError("Request vượt quá giới hạn kích thước.")
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise AgentError("JSON request không hợp lệ.") from None
+        if not isinstance(payload, dict):
+            raise AgentError("Expected a JSON object")
+        return cast(dict[str, Any], payload)
+
     async def status(request: Request) -> JSONResponse:
         if (denied := await authorize(request)) is not None:
             return denied
         if not config.enabled:
             return JSONResponse({"enabled": False, "available": False, "message": "Agent is disabled"})
         try:
-            return JSONResponse(await gateway.status(), headers={"Cache-Control": "no-store"})
+            return JSONResponse(await legacy_gateway.status(), headers={"Cache-Control": "no-store"})
         except AgentError as exc:
             return JSONResponse({"enabled": True, "available": False, "provider": config.provider,
                                  "model": config.model, "message": str(exc)}, headers={"Cache-Control": "no-store"})
 
+    async def test_provider(request: Request) -> JSONResponse:
+        if (denied := await authorize(request)) is not None:
+            return denied
+        try:
+            payload = await read_json_body(request, 16_384)
+            provider_settings = ProviderSettings.from_payload(payload.get("provider_config"))
+            gateway = ProviderGateway(provider_settings)
+            async with provider_limit:
+                result = await gateway.test_connection()
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except AgentError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400, headers={"Cache-Control": "no-store"})
+
     async def chat(request: Request) -> JSONResponse:
         if (denied := await authorize(request)) is not None:
             return denied
-        if not config.enabled:
-            return JSONResponse({"error": "Agent is disabled"}, status_code=503)
-        body = bytearray()
-        async for chunk in request.stream():
-            body.extend(chunk)
-            if len(body) > 131072:
-                return JSONResponse({"error": "Conversation exceeds 128 KiB"}, status_code=413)
         try:
-            payload = json.loads(body)
-            if not isinstance(payload, dict):
-                raise AgentError("Expected a JSON object")
-            payload = cast(dict[str, Any], payload)
+            payload = await read_json_body(request, 131_072)
             messages = clean_messages(payload.get("messages"))
             allow_logs = payload.get("allow_logs") is True
+            provider_payload = payload.get("provider_config")
+            if provider_payload is not None:
+                provider_settings = ProviderSettings.from_payload(provider_payload)
+                gateway: Any = ProviderGateway(provider_settings)
+            else:
+                if not config.enabled:
+                    return JSONResponse({"error": "Choose and test an AI provider first."}, status_code=503)
+                gateway = legacy_gateway
             tools = [{"type": "function", "function": {"name": t.name,
                       "description": t.description or "", "parameters": t.input_schema}}
                      for t in await mcp.list_tools() if allow_logs or t.name != "read_allowed_log"]
-            result = await gateway.chat(messages, tools)
+            async with provider_limit:
+                result = await gateway.chat(messages, tools)
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
-        except (json.JSONDecodeError, UnicodeDecodeError, AgentError) as exc:
-            return JSONResponse({"error": str(exc) if isinstance(exc, AgentError) else "Invalid JSON"}, status_code=400)
+        except AgentError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
 
-    return [Route("/agent/status", status, methods=["GET"]), Route("/agent/chat", chat, methods=["POST"])]
+    return [
+        Route("/agent/status", status, methods=["GET"]),
+        Route("/agent/test", test_provider, methods=["POST"]),
+        Route("/agent/chat", chat, methods=["POST"]),
+    ]
