@@ -166,7 +166,7 @@ class Settings:
             ("ssh.service", "cron.service", "systemd-timesyncd.service"),
         )
         if any(
-            not re.fullmatch(r"[A-Za-z0-9_.@:-]{1,128}\.service", unit)
+            not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.@:-]{0,127}\.service", unit)
             for unit in allowed_systemd_units
         ):
             raise ConfigurationError("ALLOWED_SYSTEMD_UNITS must contain valid .service unit names")
