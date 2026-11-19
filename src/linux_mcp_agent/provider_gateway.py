@@ -95,8 +95,8 @@ class ProviderGateway:
         elif self.settings.provider == "openai":
             headers["Authorization"] = f"Bearer {self.settings.api_key}"
         elif self.settings.provider == "anthropic":
-            headers["x-api-key"] = self.settings.api_key
-            headers["anthropic-version"] = "2023-06-01"
+            headers["Authorization"] = f"Bearer {self.settings.api_key}"
+            headers["anthropic-version"] = "2026-10-21"
         return headers
 
     def _request(
@@ -236,7 +236,6 @@ class ProviderGateway:
             "max_tokens": 1536,
             "tool_choice": "auto",
             "parallel_tool_calls": False,
-            "store": False,
         }
         if tools:
             payload["tools"] = [
