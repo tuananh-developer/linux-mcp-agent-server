@@ -43,10 +43,10 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("AUTH_MODE", "disabled")
-    monkeypatch.setattr(
-        "linux_mcp_agent.server.get_service_status",
-        lambda unit, *_args: {"unit": unit, "activeState": "active", "status": "ok"},
-    )
+    def fake_service_status(unit: str, *_args: Any) -> dict[str, object]:
+        return {"unit": unit, "activeState": "active", "status": "ok"}
+
+    monkeypatch.setattr("linux_mcp_agent.server.get_service_status", fake_service_status)
     server = build_mcp_server(Settings.from_env())
 
     # Client(server) uses the SDK's in-process MCP transport. The deployed
@@ -75,12 +75,13 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert metrics.is_error is not True
         assert metrics.content
 
-        for name, arguments in (
+        tool_calls: list[tuple[str, dict[str, Any]]] = [
             ("get_network_stats", {}),
             ("get_service_status", {"unit": "ssh.service"}),
             ("check_port", {"port": 1}),
             ("get_system_alerts", {}),
-        ):
+        ]
+        for name, arguments in tool_calls:
             result = await client.call_tool(name, arguments)
             assert result.is_error is not True, name
             assert result.content, name
