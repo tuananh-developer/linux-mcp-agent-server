@@ -26,6 +26,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
+      - name: Validate shell script syntax
+        run: |
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
+
       - name: Set up Python
         uses: actions/setup-python@v7.1.0
         with:
