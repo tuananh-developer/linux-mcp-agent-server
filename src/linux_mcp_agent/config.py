@@ -89,7 +89,7 @@ class Settings:
             disk_threshold = float(os.getenv("DISK_WARNING_THRESHOLD_PERCENT", "85"))
         except ValueError as exc:
             raise ConfigurationError(
-                "MCP_PORT, timeout, output-size, cache and alert-threshold settings must be numeric"
+                "MCP_PORT, JOURNALCTL_TIMEOUT_SECONDS, MAX_LOG_OUTPUT_BYTES, MCP_INTROSPECTION_CACHE_TTL_SECONDS and alert thresholds must be numeric"
             ) from exc
         if not 1 <= port <= 65535:
             raise ConfigurationError("MCP_PORT must be between 1 and 65535")
