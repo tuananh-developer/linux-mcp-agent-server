@@ -29,6 +29,10 @@ async def test_server_registers_the_required_mcp_interface(
         "get_disk_usage",
         "list_processes",
         "read_allowed_log",
+        "get_network_stats",
+        "get_service_status",
+        "check_port",
+        "get_system_alerts",
     }
     assert [str(resource.uri) for resource in resources] == ["linux://system/summary"]
     assert [prompt.name for prompt in prompts] == ["health_check"]
@@ -39,6 +43,10 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("AUTH_MODE", "disabled")
+    monkeypatch.setattr(
+        "linux_mcp_agent.server.get_service_status",
+        lambda unit, *_args: {"unit": unit, "activeState": "active", "status": "ok"},
+    )
     server = build_mcp_server(Settings.from_env())
 
     # Client(server) uses the SDK's in-process MCP transport. The deployed
@@ -63,6 +71,16 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert metrics.is_error is not True
         assert metrics.content
 
+        for name, arguments in (
+            ("get_network_stats", {}),
+            ("get_service_status", {"unit": "ssh.service"}),
+            ("check_port", {"port": 1}),
+            ("get_system_alerts", {}),
+        ):
+            result = await client.call_tool(name, arguments)
+            assert result.is_error is not True, name
+            assert result.content, name
+
         summary = await client.read_resource("linux://system/summary")
         assert len(summary.contents) == 1
         summary_text = getattr(summary.contents[0], "text", None)
@@ -70,6 +88,7 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         summary_payload = json.loads(summary_text)
         assert "operatingSystem" in summary_payload
         assert "cpuUsagePercent" in summary_payload
+        assert "network" in summary_payload
 
         prompt = await client.get_prompt("health_check", {"focus": "overview"})
         assert len(prompt.messages) == 1
