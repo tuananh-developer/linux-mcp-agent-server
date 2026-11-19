@@ -138,32 +138,82 @@ fi
 
 section "1/6 — Start infrastructure and MCP Server"
 printf 'Starting PostgreSQL, Keycloak, Caddy and ensuring MCP is running...\n'
-# start-demo.sh exits if MCP is already healthy; otherwise it remains attached
-# to the native Uvicorn process. Run it in the background while polling health.
-bash "$ROOT/scripts/start-demo.sh" &
+# Wait until start-demo.sh has completed its infrastructure checks. If it has to
+# launch Uvicorn in the foreground, detect that mode and keep the server alive.
+STARTUP_LOG="$HOME/mcp-demo-startup-$(date +%Y%m%d-%H%M%S).log"
+: > "$STARTUP_LOG"
+bash "$ROOT/scripts/start-demo.sh" > "$STARTUP_LOG" 2>&1 &
 START_DEMO_PID=$!
-MCP_READY=0
+STARTUP_MODE=""
+STARTUP_WAITED=0
 
 for ((attempt = 1; attempt <= 240; attempt++)); do
+  if grep -q "Launching MCP in the foreground" "$STARTUP_LOG"; then
+    STARTUP_MODE="foreground"
+    break
+  fi
+  if grep -Eq "MCP is already healthy|MCP systemd service is healthy" "$STARTUP_LOG"; then
+    STARTUP_MODE="completed"
+    break
+  fi
+  if ! kill -0 "$START_DEMO_PID" 2>/dev/null; then
+    if wait "$START_DEMO_PID"; then
+      STARTUP_WAITED=1
+      STARTUP_MODE="completed"
+      break
+    else
+      status=$?
+      cat "$STARTUP_LOG" >&2
+      fail "scripts/start-demo.sh exited with status $status."
+    fi
+  fi
+  if (( attempt % 5 == 0 )); then
+    printf '.'
+  fi
+  sleep 1
+done
+printf '\n'
+[[ -n "$STARTUP_MODE" ]] || {
+  cat "$STARTUP_LOG" >&2
+  fail "Timed out waiting for scripts/start-demo.sh to finish its startup checks."
+}
+
+if [[ "$STARTUP_MODE" == "completed" && "$STARTUP_WAITED" -eq 0 ]]; then
+  if wait "$START_DEMO_PID"; then
+    STARTUP_WAITED=1
+  else
+    status=$?
+    cat "$STARTUP_LOG" >&2
+    fail "scripts/start-demo.sh exited with status $status."
+  fi
+fi
+cat "$STARTUP_LOG"
+
+MCP_READY=0
+for ((attempt = 1; attempt <= 60; attempt++)); do
   if curl --silent --show-error --fail --connect-timeout 2 --max-time 3 \
       "$MCP_HEALTH_URL" >/dev/null 2>&1; then
     MCP_READY=1
     break
   fi
-
-  if ! kill -0 "$START_DEMO_PID" 2>/dev/null; then
+  if [[ "$STARTUP_MODE" == "foreground" ]] && ! kill -0 "$START_DEMO_PID" 2>/dev/null; then
     if wait "$START_DEMO_PID"; then
-      START_DEMO_PID=""
+      status=0
     else
       status=$?
-      fail "scripts/start-demo.sh exited with status $status before MCP became healthy."
     fi
+    tail -n 60 "$STARTUP_LOG" >&2
+    fail "MCP foreground process exited before becoming healthy (status $status)."
   fi
   sleep 1
 done
 
-[[ "$MCP_READY" -eq 1 ]] || fail "MCP did not become healthy within 240 seconds. Inspect server.env and startup output."
+[[ "$MCP_READY" -eq 1 ]] || {
+  tail -n 60 "$STARTUP_LOG" >&2
+  fail "MCP did not become healthy within 60 seconds."
+}
 pass "MCP health endpoint returned HTTP 200 at $MCP_HEALTH_URL"
+printf 'Startup log: %s\n' "$STARTUP_LOG"
 
 printf '\nDocker services:\n'
 docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" --profile lan ps
