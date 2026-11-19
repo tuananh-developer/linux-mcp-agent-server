@@ -100,6 +100,13 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert isinstance(prompt_text, str)
         assert "read-only" in prompt_text
 
+        connectivity_prompt = await client.get_prompt(
+            "health_check", {"focus": "connectivity"}
+        )
+        connectivity_text = getattr(connectivity_prompt.messages[0].content, "text", None)
+        assert isinstance(connectivity_text, str)
+        assert "127.0.0.1" in connectivity_text
+
 
 @pytest.mark.asyncio
 async def test_read_allowed_log_enforces_logs_scope_before_executing_journalctl(
