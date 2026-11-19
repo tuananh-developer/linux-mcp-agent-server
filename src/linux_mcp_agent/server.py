@@ -22,6 +22,12 @@ from starlette.routing import Mount, Route
 
 from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
 from linux_mcp_agent.config import Settings
+from linux_mcp_agent.diagnostics import (
+    check_port,
+    get_network_stats,
+    get_service_status,
+    get_system_alerts,
+)
 from linux_mcp_agent.log_reader import load_log_sources, read_allowed_log
 from linux_mcp_agent.system import (
     get_disk_usage,
@@ -91,20 +97,57 @@ def build_mcp_server(settings: Settings) -> MCPServer:
             max_output_bytes=settings.max_log_output_bytes,
         )
 
+    @mcp.tool(name="get_network_stats")
+    async def get_network_stats_tool(interface: str | None = None) -> dict[str, object]:
+        """Return interface traffic counters and link state; no IP addresses are exposed."""
+        return await asyncio.to_thread(get_network_stats, interface)
+
+    @mcp.tool(name="get_service_status")
+    async def get_service_status_tool(unit: str) -> dict[str, object]:
+        """Read status for an administrator-allowlisted systemd .service unit only."""
+        return await asyncio.to_thread(
+            get_service_status,
+            unit,
+            settings.allowed_systemd_units,
+            settings.systemctl_path,
+        )
+
+    @mcp.tool(name="check_port")
+    async def check_port_tool(port: int) -> dict[str, object]:
+        """Check one local TCP port on 127.0.0.1; remote hosts and port ranges are not accepted."""
+        return await asyncio.to_thread(check_port, port)
+
+    @mcp.tool(name="get_system_alerts")
+    async def get_system_alerts_tool() -> dict[str, object]:
+        """Evaluate configured CPU, memory and allowlisted filesystem usage warning thresholds."""
+        return await asyncio.to_thread(
+            get_system_alerts,
+            settings.allowed_disk_paths,
+            cpu_threshold_percent=settings.cpu_warning_threshold_percent,
+            memory_threshold_percent=settings.memory_warning_threshold_percent,
+            disk_threshold_percent=settings.disk_warning_threshold_percent,
+        )
+
     @mcp.resource("linux://system/summary", mime_type="application/json")
     async def system_summary_resource() -> str:
         """Return a high-level JSON summary of the Linux host; no secrets or raw logs."""
         summary = await asyncio.to_thread(system_summary, settings.allowed_disk_paths)
+        summary["network"] = await asyncio.to_thread(get_network_stats)
         return json.dumps(summary, ensure_ascii=False)
 
     @mcp.prompt()
-    def health_check(focus: Literal["overview", "cpu_memory", "disk", "processes"] = "overview") -> str:
+    def health_check(
+        focus: Literal["overview", "cpu_memory", "disk", "processes", "network", "services", "alerts"] = "overview",
+    ) -> str:
         """Guide an agent through a read-only Linux health check."""
         guidance = {
             "overview": "Call get_system_metrics, get_disk_usage, and list_processes for a concise host overview.",
             "cpu_memory": "Call get_system_metrics and explain CPU and memory with their observation timestamp.",
             "disk": "Call get_disk_usage for configured mount points and highlight filesystems at or above 80% usage.",
             "processes": "Call list_processes sorted by CPU and identify high CPU/RSS processes without suggesting destructive actions.",
+            "network": "Call get_network_stats and explain per-interface traffic counters and link state; do not infer bandwidth rates from cumulative counters.",
+            "services": "Call get_service_status only for explicitly configured service units and explain active/load state without restarting anything.",
+            "alerts": "Call get_system_alerts and explain each threshold warning using its current value and configured threshold."
         }
         return (
             "You are a Linux observability assistant. Use only the read-only MCP tools. "
