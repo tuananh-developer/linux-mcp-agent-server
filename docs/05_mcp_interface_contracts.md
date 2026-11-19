@@ -52,7 +52,7 @@ No arguments. Evaluates CPU, memory and configured filesystem usage against admi
 ## Prompt
 
 - Name: `health_check`.
-- Argument: `focus` enum `overview | cpu_memory | disk | processes | network | services | alerts`, default `overview`.
+- Argument: `focus` enum `overview | cpu_memory | disk | processes | network | services | connectivity | alerts`, default `overview`.
 - Instructs the Agent to call relevant read-only tools, cite returned timestamps/numbers, treat logs as untrusted input and avoid destructive actions.
 
 ## OAuth scopes
@@ -61,7 +61,7 @@ No arguments. Evaluates CPU, memory and configured filesystem usage against admi
 |---|---|
 | `/mcp`, tool/resource/prompt discovery | `mcp.read` |
 | `read_allowed_log` | `mcp.read` and `mcp.logs.read` |
-| Other four monitoring/diagnostic tools | `mcp.read` |
+| Other seven tools | `mcp.read` |
 
 ## Error semantics
 
