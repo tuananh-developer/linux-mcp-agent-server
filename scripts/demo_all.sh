@@ -283,8 +283,9 @@ fi
 section "4/6 — Repository implementation inventory"
 cat <<'EOF'
 MCP server modules:
-  server.py       — 4 Tools, 1 Resource, 1 Prompt, ASGI composition
+  server.py       — 8 Tools, 1 Resource, 1 Prompt, ASGI composition
   system.py       — CPU, memory, disk and process telemetry
+  diagnostics.py  — network, service, local-port and threshold diagnostics
   log_reader.py   — allowlisted, bounded and redacted journald reader
   auth.py         — Keycloak RFC 7662 token introspection
   auth_claims.py  — issuer, expiry, audience, scope and client validation
