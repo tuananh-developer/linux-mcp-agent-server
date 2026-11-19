@@ -19,6 +19,18 @@ def test_provider_settings_require_key_and_hide_it_from_repr() -> None:
     })
     assert "secret-test-key" not in repr(settings)
 
+@pytest.mark.parametrize("provider", [None, [], {}, 123, "unsupported"])
+def test_provider_settings_reject_invalid_provider_type(provider: object) -> None:
+    with pytest.raises(AgentError, match="không được hỗ trợ"):
+        ProviderSettings.from_payload({"provider": provider, "model": "test-model", "api_key": "key"})
+
+
+def test_ollama_rejects_malformed_url_without_server_error() -> None:
+    with pytest.raises(AgentError, match="base URL"):
+        ProviderSettings.from_payload({
+            "provider": "ollama", "model": "qwen3:4b", "base_url": "http://[",
+        })
+
 
 @pytest.mark.parametrize(
     "url",
