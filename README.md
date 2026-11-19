@@ -23,7 +23,7 @@ The server exposes:
 | Resource | `linux://system/summary` | High-level JSON system and network summary |
 | Prompt | `health_check` | Safe, read-only health-check instructions |
 
-The AI assistant integration is optional; its model gateway uses the same authenticated MCP tools. The dashboard itself does not require an LLM, database, or provider API key. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
+The AI assistant is optional and supports user-selected Gemini, OpenAI, Anthropic, or local Ollama models. Provider API keys are supplied per session and are not saved by the server. The dashboard itself does not require an LLM, database, or provider API key. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
 
 ## Architecture
 
