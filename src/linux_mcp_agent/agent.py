@@ -258,7 +258,8 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
                 result = await gateway.test_connection()
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
         except AgentError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400, headers={"Cache-Control": "no-store"})
+            status_code = 413 if str(exc).startswith("Request vượt quá") else 400
+            return JSONResponse({"error": str(exc)}, status_code=status_code, headers={"Cache-Control": "no-store"})
 
     async def chat(request: Request) -> JSONResponse:
         if (denied := await authorize(request)) is not None:
@@ -282,7 +283,8 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
                 result = await gateway.chat(messages, tools)
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
         except AgentError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400)
+            status_code = 413 if str(exc).startswith("Request vượt quá") else 400
+            return JSONResponse({"error": str(exc)}, status_code=status_code)
 
     return [
         Route("/agent/status", status, methods=["GET"]),
