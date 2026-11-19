@@ -72,8 +72,12 @@ def get_service_status(
     if (
         not unit.endswith(".service")
         or not 1 <= len(unit) <= 128
-        or not unit[0].isascii() or not unit[0].isalnum()
-        or not all(character.isascii() and (character.isalnum() or character in "_.@:-") for character in unit)
+        or not unit[0].isascii()
+        or not unit[0].isalnum()
+        or not all(
+            character.isascii() and (character.isalnum() or character in "_.@:-")
+            for character in unit
+        )
     ):
         raise ValueError("unit must be a valid systemd .service unit name")
     if not math.isfinite(timeout_seconds) or not 0.1 <= timeout_seconds <= 5.0:
