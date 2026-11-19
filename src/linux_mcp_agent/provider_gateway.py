@@ -215,7 +215,7 @@ class ProviderGateway:
             if role == "assistant":
                 item: dict[str, Any] = {"role": "assistant", "content": message["content"] or None}
                 calls = []
-                for call in message.get("tool_calls", []):
+                for call_index, call in enumerate(message.get("tool_calls", [])):
                     function = call["function"]
                     calls.append({
                         "id": call.get("id") or f"call_{index}_{call_index}",
@@ -294,7 +294,7 @@ class ProviderGateway:
                 parts: list[dict[str, Any]] = []
                 if message["content"]:
                     parts.append({"text": message["content"]})
-                for call_index, call in enumerate(message.get("tool_calls", [])):
+                for call in message.get("tool_calls", []):
                     function = call["function"]
                     parts.append({"functionCall": {
                         "name": function["name"],
