@@ -2,6 +2,10 @@
 
 A read-only Linux observability MCP server for external Agentic AI clients. Built with Python 3.15.2 (the latest stable Python release on 2026-11-02) and the official MCP Python SDK 2.3.0. CI checks both Python 3.14.10 and 3.15.2 because some upstream package classifiers have not yet caught up with the newest interpreter. The primary acceptance environment is **Ubuntu 24.04 LTS**.
 
+## Browser dashboard
+
+Open `/` or `/dashboard` for live CPU, RAM, disk, network, process, service, port and alert views. The optional AI assistant is available at `/assistant`. Dashboard telemetry is requested through authenticated MCP tools; it does not require an LLM, database, or external API key. See [docs/12_dashboard.md](docs/12_dashboard.md) for data flow and security details.
+
 ## Scope
 
 The server exposes:
@@ -19,7 +23,7 @@ The server exposes:
 | Resource | `linux://system/summary` | High-level JSON system and network summary |
 | Prompt | `health_check` | Safe, read-only health-check instructions |
 
-This repository does **not** host an LLM or implement the Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection and provider fallback. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
+The AI assistant integration is optional; its model gateway uses the same authenticated MCP tools. The dashboard itself does not require an LLM, database, or provider API key. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
 
 ## Architecture
 
