@@ -15,7 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from linux_mcp_agent.agent import AgentError, SYSTEM_PROMPT, clean_messages
+from linux_mcp_agent.agent import SYSTEM_PROMPT, AgentError, clean_messages
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -212,7 +212,7 @@ class ProviderGateway:
             if role == "assistant":
                 item: dict[str, Any] = {"role": "assistant", "content": message["content"] or None}
                 calls = []
-                for call_index, call in enumerate(message.get("tool_calls", [])):
+                for call in message.get("tool_calls", []):
                     function = call["function"]
                     calls.append({
                         "id": call.get("id") or f"call_{index}_{call_index}",
