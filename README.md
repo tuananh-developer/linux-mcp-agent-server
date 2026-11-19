@@ -12,7 +12,11 @@ The server exposes:
 | Tool | `get_disk_usage` | Allowlisted filesystem capacity |
 | Tool | `list_processes` | Bounded PID/name/CPU/RAM snapshot |
 | Tool | `read_allowed_log` | Allowlisted journald unit aliases only |
-| Resource | `linux://system/summary` | High-level JSON system summary |
+| Tool | `get_network_stats` | Per-interface traffic counters and link state |
+| Tool | `get_service_status` | Read-only status of allowlisted systemd services |
+| Tool | `check_port` | Single local TCP listener check on loopback |
+| Tool | `get_system_alerts` | CPU, memory and allowlisted-disk threshold alerts |
+| Resource | `linux://system/summary` | High-level JSON system and network summary |
 | Prompt | `health_check` | Safe, read-only health-check instructions |
 
 This repository does **not** host an LLM or implement the Agent runtime. The external Agent/MCP Client owns model selection, inference, tool selection and provider fallback. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
@@ -101,5 +105,5 @@ In a second terminal, run the real Keycloak-authenticated MCP acceptance client:
 uv run python scripts/demo_live.py
 ```
 
-It discovers and calls all four tools, reads `linux://system/summary`, and retrieves the `health_check` prompt. See [docs/10_live_demo.md](docs/10_live_demo.md) for one-time credential setup and TLS trust notes. The client keeps the access token in memory and never prints or saves credentials.
+It discovers and calls all eight tools, reads `linux://system/summary`, and retrieves the `health_check` prompt. See [docs/10_live_demo.md](docs/10_live_demo.md) for one-time credential setup and TLS trust notes. The client keeps the access token in memory and never prints or saves credentials.
 
