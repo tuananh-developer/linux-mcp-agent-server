@@ -284,7 +284,7 @@ class ProviderGateway:
     @staticmethod
     def _gemini_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         contents: list[dict[str, Any]] = []
-        for index, message in enumerate(messages):
+        for message in messages:
             role = message["role"]
             if role == "user":
                 contents.append({"role": "user", "parts": [{"text": message["content"]}]})
