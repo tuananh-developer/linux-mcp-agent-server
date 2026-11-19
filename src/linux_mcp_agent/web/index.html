@@ -71,15 +71,52 @@
     <main id="main" tabindex="-1">
       <section class="view" id="agent" aria-label="Chat với AI">
         <div class="model-bar" id="model-bar" data-state="idle">
-          <div class="model-label"><span class="status-dot" aria-hidden="true"></span><span id="agent-model-status" role="status">Kết nối MCP để dùng AI.</span></div>
-          <button class="text-button" id="agent-recheck" type="button">Kiểm tra model</button>
+          <div class="model-label"><span class="status-dot" aria-hidden="true"></span><span id="agent-model-status" role="status">Kết nối MCP để cấu hình AI.</span></div>
+          <button class="text-button" id="agent-recheck" type="button">Kiểm tra kết nối</button>
         </div>
         <div id="banner" class="banner" role="status" hidden></div>
-        <div class="banner setup-banner" id="agent-setup" hidden>
-          <strong>Thiết lập model</strong>
-          <span id="agent-setup-instruction"></span>
-          <code id="agent-pull-command"></code>
-        </div>
+
+        <section class="provider-settings" aria-labelledby="provider-title">
+          <div class="provider-heading">
+            <div>
+              <h2 id="provider-title">Nhà cung cấp AI</h2>
+              <p>Chọn model và dùng API key của chính bạn. Không cần cấu hình key trong file server.</p>
+            </div>
+            <span class="provider-memory">Chỉ lưu trong tab hiện tại</span>
+          </div>
+          <div class="provider-grid">
+            <div>
+              <label for="agent-provider">Provider</label>
+              <select id="agent-provider">
+                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic Claude</option>
+                <option value="ollama">Ollama (local)</option>
+              </select>
+            </div>
+            <div>
+              <label for="agent-model">Model ID</label>
+              <input id="agent-model" list="agent-model-options" value="gemini-3.8-flash" maxlength="128" autocomplete="off" spellcheck="false">
+              <datalist id="agent-model-options"></datalist>
+            </div>
+            <div id="agent-api-key-field" class="provider-wide">
+              <label for="agent-api-key">API key</label>
+              <input id="agent-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Dán API key của provider đã chọn">
+            </div>
+            <div id="agent-ollama-field" class="provider-wide" hidden>
+              <label for="agent-ollama-url">Ollama URL trên máy chủ</label>
+              <input id="agent-ollama-url" value="http://127.0.0.1:11434" autocomplete="off" spellcheck="false">
+              <p class="provider-help">Chỉ chấp nhận địa chỉ loopback của máy đang chạy MCP server.</p>
+            </div>
+          </div>
+          <div class="provider-actions">
+            <p id="agent-provider-feedback" role="status">API key không được ghi vào localStorage, database hoặc file cấu hình.</p>
+            <div>
+              <button class="button" id="agent-provider-clear" type="button">Xóa cấu hình</button>
+              <button class="button primary" id="agent-provider-test" type="button">Kiểm tra kết nối</button>
+            </div>
+          </div>
+        </section>
 
         <div class="chat-welcome" id="chat-welcome">
           <div class="terminal-art" aria-hidden="true">
