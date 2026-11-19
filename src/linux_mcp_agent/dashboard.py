@@ -1,5 +1,6 @@
 """Serve the Linux Observatory overview and optional AI assistant shell."""
 from pathlib import Path
+
 from starlette.requests import Request
 from starlette.responses import FileResponse
 from starlette.routing import Route

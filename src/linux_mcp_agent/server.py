@@ -23,8 +23,8 @@ from starlette.routing import Mount, Route
 
 from linux_mcp_agent.agent import agent_routes
 from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
-from linux_mcp_agent.dashboard import dashboard_routes
 from linux_mcp_agent.config import Settings
+from linux_mcp_agent.dashboard import dashboard_routes
 from linux_mcp_agent.diagnostics import (
     check_port,
     get_network_stats,
