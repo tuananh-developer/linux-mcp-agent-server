@@ -29,6 +29,10 @@ async def test_server_registers_the_required_mcp_interface(
         "get_disk_usage",
         "list_processes",
         "read_allowed_log",
+        "get_network_stats",
+        "get_service_status",
+        "check_port",
+        "get_system_alerts",
     }
     assert [str(resource.uri) for resource in resources] == ["linux://system/summary"]
     assert [prompt.name for prompt in prompts] == ["health_check"]
@@ -39,6 +43,10 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("AUTH_MODE", "disabled")
+    def fake_service_status(unit: str, *_args: Any) -> dict[str, object]:
+        return {"unit": unit, "activeState": "active", "status": "ok"}
+
+    monkeypatch.setattr("linux_mcp_agent.server.get_service_status", fake_service_status)
     server = build_mcp_server(Settings.from_env())
 
     # Client(server) uses the SDK's in-process MCP transport. The deployed
@@ -53,6 +61,10 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
             "get_disk_usage",
             "list_processes",
             "read_allowed_log",
+            "get_network_stats",
+            "get_service_status",
+            "check_port",
+            "get_system_alerts",
         }
         assert [str(resource.uri) for resource in resources.resources] == [
             "linux://system/summary"
@@ -63,6 +75,17 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert metrics.is_error is not True
         assert metrics.content
 
+        tool_calls: list[tuple[str, dict[str, Any]]] = [
+            ("get_network_stats", {}),
+            ("get_service_status", {"unit": "ssh.service"}),
+            ("check_port", {"port": 1}),
+            ("get_system_alerts", {}),
+        ]
+        for name, arguments in tool_calls:
+            result = await client.call_tool(name, arguments)
+            assert result.is_error is not True, name
+            assert result.content, name
+
         summary = await client.read_resource("linux://system/summary")
         assert len(summary.contents) == 1
         summary_text = getattr(summary.contents[0], "text", None)
@@ -70,12 +93,20 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         summary_payload = json.loads(summary_text)
         assert "operatingSystem" in summary_payload
         assert "cpuUsagePercent" in summary_payload
+        assert "network" in summary_payload
 
         prompt = await client.get_prompt("health_check", {"focus": "overview"})
         assert len(prompt.messages) == 1
         prompt_text = getattr(prompt.messages[0].content, "text", None)
         assert isinstance(prompt_text, str)
         assert "read-only" in prompt_text
+
+        connectivity_prompt = await client.get_prompt(
+            "health_check", {"focus": "connectivity"}
+        )
+        connectivity_text = getattr(connectivity_prompt.messages[0].content, "text", None)
+        assert isinstance(connectivity_text, str)
+        assert "127.0.0.1" in connectivity_text
 
 
 @pytest.mark.asyncio

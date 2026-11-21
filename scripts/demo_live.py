@@ -28,6 +28,10 @@ EXPECTED_TOOLS = {
     "get_disk_usage",
     "list_processes",
     "read_allowed_log",
+    "get_network_stats",
+    "get_service_status",
+    "check_port",
+    "get_system_alerts",
 }
 
 
@@ -407,7 +411,7 @@ def run_acceptance_demo(client: StreamableHttpMcpClient) -> tuple[int, int]:
             print("FAIL: Missing tools: " + ", ".join(sorted(missing)))
         else:
             passed += 1
-            print("PASS: All 4 required tools are registered")
+            print("PASS: All 8 required tools are registered")
 
     resources_list = record("Resources discovery", lambda: client.rpc("resources/list"))
     if resources_list is not None:
@@ -442,6 +446,10 @@ def run_acceptance_demo(client: StreamableHttpMcpClient) -> tuple[int, int]:
         ("get_disk_usage", {}),
         ("list_processes", {"limit": 5, "sort_by": "cpu"}),
         ("read_allowed_log", {"alias": "ssh", "lines": 5}),
+        ("get_network_stats", {}),
+        ("get_service_status", {"unit": "ssh.service"}),
+        ("check_port", {"port": 3002}),
+        ("get_system_alerts", {}),
     ]
     for name, arguments in calls:
         if name not in discovered_tools:

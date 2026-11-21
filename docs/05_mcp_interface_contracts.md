@@ -27,16 +27,32 @@ Input: `limit` default 10 (1..100), `sort_by` enum `cpu|memory`, and optional li
 
 Input: `alias` and `lines` default 50 (1..200). Alias is resolved only from `config/log-sources.json`; the caller never supplies a path, systemd unit, filter or command. The reader invokes a fixed `journalctl` argv with `shell=False`, a timeout, byte limit and best-effort secret redaction. Log messages are untrusted data.
 
+### `get_network_stats`
+
+Optional input: `interface`, an exact interface name (1..64 characters). With no argument, returns at most 64 interfaces. Output contains link state, MTU, speed and cumulative byte/packet/error/drop counters. Interface addresses are intentionally omitted; counters are cumulative and must not be presented as a measured rate.
+
+### `get_service_status`
+
+Input: exact `unit` name. Only administrator-configured `ALLOWED_SYSTEMD_UNITS` entries ending in `.service` are accepted. The implementation invokes a fixed `systemctl show` argv with `shell=False`, a two-second timeout and a strict property list. It never accepts a command, unit path, or action from the caller. This tool only reads state.
+
+### `check_port`
+
+Input: one integer TCP port (1..65535). It attempts one connection to `127.0.0.1` with a bounded timeout. No host argument, remote destination, port range or UDP scan is supported.
+
+### `get_system_alerts`
+
+No arguments. Evaluates CPU, memory and configured filesystem usage against administrator-set warning thresholds. Defaults are CPU 85%, memory 90% and disk 85%; values are configurable through `CPU_WARNING_THRESHOLD_PERCENT`, `MEMORY_WARNING_THRESHOLD_PERCENT` and `DISK_WARNING_THRESHOLD_PERCENT`. It returns explainable threshold findings, not predictive diagnosis or automated remediation.
+
 ## Resource
 
 - URI: `linux://system/summary`.
-- Returns a JSON high-level snapshot: distro, kernel release, architecture, logical CPU count, uptime, CPU/RAM usage and allowlisted disk summary.
+- Returns a JSON high-level snapshot: distro, kernel release, architecture, logical CPU count, uptime, CPU/RAM usage, allowlisted disk summary and per-interface network counters. Interface addresses and raw logs are excluded.
 - No tokens, secrets, process command lines, account names or raw log content.
 
 ## Prompt
 
 - Name: `health_check`.
-- Argument: `focus` enum `overview | cpu_memory | disk | processes`, default `overview`.
+- Argument: `focus` enum `overview | cpu_memory | disk | processes | network | services | connectivity | alerts`, default `overview`.
 - Instructs the Agent to call relevant read-only tools, cite returned timestamps/numbers, treat logs as untrusted input and avoid destructive actions.
 
 ## OAuth scopes
@@ -45,6 +61,7 @@ Input: `alias` and `lines` default 50 (1..200). Alias is resolved only from `con
 |---|---|
 | `/mcp`, tool/resource/prompt discovery | `mcp.read` |
 | `read_allowed_log` | `mcp.read` and `mcp.logs.read` |
+| Other seven tools | `mcp.read` |
 
 ## Error semantics
 

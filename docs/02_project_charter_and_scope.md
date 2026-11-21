@@ -7,8 +7,9 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 ## In scope
 
 - Official MCP Python SDK v2, Streamable HTTP endpoint at `/mcp`.
-- Linux CPU/RAM, allowlisted filesystem usage, bounded process list, allowlisted real systemd journal access.
-- Four MCP Tools, one MCP Resource and one MCP Prompt.
+- Linux CPU/RAM, allowlisted filesystem usage, bounded process list and allowlisted systemd journal access.
+- Per-interface network counters, administrator-allowlisted systemd service status, one-port loopback TCP checks and configurable CPU/memory/disk alerts.
+- Eight MCP Tools, one MCP Resource and one MCP Prompt.
 - OAuth2/OIDC resource-server validation using Keycloak, exact issuer and resource/audience binding, and least-privilege scopes.
 - Caddy HTTPS reverse proxy, PostgreSQL for Keycloak only, Docker Compose for infrastructure, and native systemd service for the MCP process.
 - Unit, protocol-contract, integration, security and performance test plans.
@@ -34,6 +35,10 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 | FR-007 | The server shall expose a `health_check` prompt with a constrained focus argument. | MCP prompt discovery/get test |
 | FR-008 | The server shall require the configured base OAuth scope for MCP access and an additional log scope for journal reads. | Authorization unit and integration tests |
 | FR-009 | The server shall expose a separate operational health endpoint at `/healthz`. | HTTP health check |
+| FR-010 | The server shall return bounded per-interface network counters without interface addresses. | Network telemetry unit tests |
+| FR-011 | The server shall inspect only administrator-allowlisted systemd service units using fixed, read-only `systemctl show` arguments. | Allowlist and subprocess-boundary tests |
+| FR-012 | The server shall check one TCP port on loopback only; callers cannot supply remote hosts or port ranges. | Loopback and input-validation tests |
+| FR-013 | The server shall evaluate CPU, memory and allowlisted-disk usage against validated administrator-configured thresholds. | Threshold and alert unit tests |
 
 ## Non-functional requirements
 
@@ -60,7 +65,7 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 ## Acceptance gates
 
 1. Unit tests and quality tools pass on every supported Python matrix entry.
-2. A standards-compliant MCP Client initializes the server and discovers all four tools, the resource and the prompt over Streamable HTTP.
+2. A standards-compliant MCP Client initializes the server and discovers all eight tools, the resource and the prompt over Streamable HTTP.
 3. Positive and negative OAuth integration tests prove issuer, expiry, audience/resource, base scope and log-specific scope enforcement.
 4. A second LAN device connects over trusted HTTPS; Caddy and Keycloak administration routes remain restricted.
 5. systemd runs as a dedicated non-root user; journal group access and its residual privilege are explicitly reviewed.

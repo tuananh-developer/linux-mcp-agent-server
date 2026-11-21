@@ -57,6 +57,10 @@ async def test_official_client_uses_real_streamable_http_transport(
                     "get_disk_usage",
                     "list_processes",
                     "read_allowed_log",
+                    "get_network_stats",
+                    "get_service_status",
+                    "check_port",
+                    "get_system_alerts",
                 }
 
                 metrics = await client.call_tool("get_system_metrics")

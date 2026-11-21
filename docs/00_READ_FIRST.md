@@ -19,13 +19,13 @@ Exact direct versions are pinned in `pyproject.toml`. Generate and commit `uv.lo
 
 ## MCP interface
 
-Tools: `get_system_metrics`, `get_disk_usage`, `list_processes`, `read_allowed_log`.
+Tools (8): `get_system_metrics`, `get_disk_usage`, `list_processes`, `read_allowed_log`, `get_network_stats`, `get_service_status`, `check_port`, `get_system_alerts`.
 
-Resource: `linux://system/summary`.
+Resource: `linux://system/summary` (system, disk and network snapshot).
 
 Prompt: `health_check`.
 
-The logs tool takes an alias only; the server maps that alias to a fixed systemd unit. The project does not expose arbitrary paths, commands, process termination or service restart.
+The logs tool takes an alias only; the server maps that alias to a fixed systemd unit. Service inspection is limited by `ALLOWED_SYSTEMD_UNITS`; port checks target only `127.0.0.1`; network output omits interface addresses; alert thresholds are administrator-configurable. The project does not expose arbitrary paths, commands, process termination or service restart.
 
 ## Local start
 

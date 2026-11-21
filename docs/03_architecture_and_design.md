@@ -12,6 +12,9 @@ flowchart TB
   M --> P[/proc and psutil/]
   M --> J[journald via fixed journalctl argv]
   M --> F[Allowlisted filesystem mount points]
+  M --> N[psutil network interface counters]
+  M --> S[systemd show for allowlisted services]
+  M --> T[Loopback TCP connect check]
   K --> D[(PostgreSQL 18.6)]
 ```
 
@@ -22,7 +25,7 @@ flowchart TB
 - Caddy: TLS, host routing and strict route allowlist. Only port 443 is exposed to the LAN.
 - Keycloak: authorization server; creates and signs tokens. The MCP service never issues tokens.
 - MCP application: verifies each bearer token through Keycloak introspection, confirms exact issuer/expiry/audience/resource/scope, and invokes read-only Linux functions.
-- Linux: source of CPU/RAM, filesystem, process and journal data.
+- Linux: source of CPU/RAM, filesystem, process, journal, network-interface and systemd service data. Port checks are loopback-only.
 - PostgreSQL: Keycloak persistence only.
 
 ## Python application layers
@@ -30,6 +33,7 @@ flowchart TB
 - `config.py`: typed environment configuration, loopback-only backend guard.
 - `auth.py` + `auth_claims.py`: RFC 7662 introspection adapter and fail-closed claim validation.
 - `system.py`: psutil-based system/disk/process metrics.
+- `diagnostics.py`: network counters, allowlisted systemd service inspection, loopback TCP checks and threshold-based alerts.
 - `log_reader.py`: alias allowlist and bounded `journalctl` execution.
 - `server.py`: MCP Tools, Resource, Prompt and ASGI composition.
 - `__main__.py`: Uvicorn process entry point.
