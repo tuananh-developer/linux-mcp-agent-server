@@ -64,15 +64,13 @@ The access token is held in memory only. The script does not print or save the t
 
 ## TLS certificate note
 
-TLS verification is enabled by default. Install the Caddy local root CA on the machine running the demo client, or pass its PEM path:
+TLS verification is always enabled. When the Caddy Compose service is running, the demo client automatically reads its local root CA from the Caddy container and uses it to validate both `mcp.home.arpa` and `auth.home.arpa`. It does not disable certificate verification.
+
+If automatic discovery is unavailable, provide the PEM file explicitly:
 
     uv run python scripts/demo_live.py --ca-cert /path/to/caddy-local-root.crt
 
-For a temporary demo on an isolated local VM only, --insecure disables certificate verification:
-
-    uv run python scripts/demo_live.py --insecure
-
-Do not use --insecure for a production client or an untrusted network.
+You can also set `MCP_DEMO_CA_CERT` to that PEM file path. The explicit CA file takes precedence over automatic discovery. The `--insecure` option is intentionally not supported.
 
 ## Expected result
 
