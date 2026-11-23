@@ -10,7 +10,6 @@ command -v docker >/dev/null 2>&1 || { echo "ERROR: Docker is not installed." >&
 [[ -r "$COMPOSE_ENV_FILE" ]] || { echo "ERROR: Missing $COMPOSE_ENV_FILE." >&2; exit 1; }
 
 mkdir -p "$(dirname "$OUTPUT")"
-chmod 700 "$(dirname "$OUTPUT")"
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" --profile lan \
   exec -T caddy cat /data/caddy/pki/authorities/local/root.crt > "$OUTPUT"
 chmod 644 "$OUTPUT"
