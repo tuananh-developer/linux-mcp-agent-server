@@ -29,8 +29,10 @@ read_config_value() {
   fi
   [[ -n "$line" ]] || return 0
   value="${line#*=}"
-  value="${value//\"/}"
-  value="${value//\\'/}"
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
   printf '%s\n' "$value"
 }
 
@@ -88,7 +90,7 @@ ensure_mcp_running() {
     return 0
   fi
 
-  if "$SYSTEMD_MANAGED"; then
+  if [[ "$SYSTEMD_MANAGED" == "true" ]]; then
     printf 'Restarting installed linux-mcp-agent systemd service...\n'
     sudo systemctl restart linux-mcp-agent.service
     wait_for_mcp || {
