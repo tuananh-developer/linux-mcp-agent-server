@@ -116,17 +116,18 @@ def clean_messages(raw: object) -> list[dict[str, Any]]:
             for call in calls:
                 entry = {"function": {"name": call["function"]["name"],
                                       "arguments": call["function"].get("arguments", {})}}
-                metadata = call.get("provider_metadata")
-                if metadata is not None:
-                    if (
-                        not isinstance(metadata, dict)
-                        or set(metadata) != {"gemini_thought_signature"}
-                        or not isinstance(metadata.get("gemini_thought_signature"), str)
-                        or len(metadata["gemini_thought_signature"]) > 131_072
-                    ):
+                metadata_value = call.get("provider_metadata")
+                if metadata_value is not None:
+                    if not isinstance(metadata_value, dict):
+                        raise AgentError("Invalid provider metadata")
+                    metadata = cast(dict[str, Any], metadata_value)
+                    if set(metadata) != {"gemini_thought_signature"}:
+                        raise AgentError("Invalid provider metadata")
+                    signature = metadata.get("gemini_thought_signature")
+                    if not isinstance(signature, str) or len(signature) > 131_072:
                         raise AgentError("Invalid provider metadata")
                     entry["provider_metadata"] = {
-                        "gemini_thought_signature": metadata["gemini_thought_signature"]
+                        "gemini_thought_signature": signature
                     }
                 if "id" in call:
                     if not isinstance(call["id"], str) or not 1 <= len(call["id"]) <= 128:
