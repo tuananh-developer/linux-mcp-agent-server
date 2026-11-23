@@ -44,7 +44,14 @@
 <section class="panel"><div class="panel-heading"><div><h2>System alerts</h2><p>Đánh giá theo ngưỡng cấu hình trên server</p></div><svg><use href="#i-alert"/></svg></div><div id="alert-summary" class="alert-summary">Đang chờ kiểm tra…</div><div id="alert-list" class="stack-list"><p class="empty">Chưa có dữ liệu cảnh báo.</p></div></section>
 </div>
 <section class="panel"><div class="panel-heading"><div><h2>Network interfaces</h2><p>Bộ đếm byte tích lũy; không phải tốc độ truyền tải tức thời</p></div><svg><use href="#i-network"/></svg></div><div id="network-list" class="network-grid"><p class="empty">Đang chờ dữ liệu network…</p></div></section>
-<section class="panel"><div class="panel-heading"><div><h2>Top processes</h2><p>Tiến trình dùng CPU nhiều nhất · dữ liệu lấy theo mẫu ngắn</p></div><span class="panel-tag">READ ONLY</span></div>
+<section class="panel"><div class="panel-heading"><div><h2>Top processes</h2><p id="process-description">Tiến trình dùng CPU nhiều nhất · dữ liệu lấy theo mẫu ngắn</p></div><span class="panel-tag">READ ONLY</span></div>
+<div class="inline-form process-form">
+<label for="process-sort">Sắp xếp</label>
+<select id="process-sort"><option value="cpu">CPU cao nhất</option><option value="memory">RAM cao nhất</option></select>
+<label for="process-filter">Tên process</label>
+<input id="process-filter" maxlength="64" placeholder="Lọc theo tên">
+<button id="filter-processes" class="button secondary" type="button">Áp dụng</button>
+</div>
 <div class="table-scroll"><table><thead><tr><th>Process</th><th>PID</th><th>CPU</th><th>Memory</th><th>RSS</th></tr></thead><tbody id="process-rows"><tr><td colspan="5" class="empty">Đang chờ dữ liệu tiến trình…</td></tr></tbody></table></div></section>
 <div class="two-col">
 <section class="panel"><div class="panel-heading"><div><h2>Service status</h2><p>Chỉ truy vấn systemd unit nằm trong allowlist</p></div></div>
