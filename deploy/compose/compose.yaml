@@ -74,6 +74,7 @@ services:
     environment:
       MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+      MCP_UPSTREAM: ${MCP_UPSTREAM:-127.0.0.1:3002}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
