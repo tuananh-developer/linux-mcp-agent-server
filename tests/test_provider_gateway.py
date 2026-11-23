@@ -115,6 +115,8 @@ async def test_openai_chat_normalizes_function_calls(monkeypatch: pytest.MonkeyP
     assert result["message"]["tool_calls"][0]["id"] == "call_cpu"
     assert result["usage"] == {"input_tokens": 12, "output_tokens": 3}
     assert captured[0]["model"] == "gpt-4.1-mini"
+    assert captured[0]["max_completion_tokens"] == 1536
+    assert "max_tokens" not in captured[0]
     assert "dummy-key" not in str(result)
 
 
@@ -131,6 +133,7 @@ async def test_gemini_chat_maps_function_call_and_history(monkeypatch: pytest.Mo
         return {
             "candidates": [{"content": {"parts": [{
                 "functionCall": {"name": "get_system_metrics", "args": {}},
+                "thoughtSignature": "opaque-gemini-signature",
             }]}}],
             "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 2},
         }
@@ -145,7 +148,9 @@ async def test_gemini_chat_maps_function_call_and_history(monkeypatch: pytest.Mo
         {"role": "tool", "tool_name": "get_disk_usage", "tool_call_id": "call_b", "content": '{"filesystems":[]}'},
     ]
     result = await gateway.chat(messages, [])
-    assert result["message"]["tool_calls"][0]["function"]["name"] == "get_system_metrics"
+    tool_call = result["message"]["tool_calls"][0]
+    assert tool_call["function"]["name"] == "get_system_metrics"
+    assert tool_call["provider_metadata"]["gemini_thought_signature"] == "opaque-gemini-signature"
     assert result["usage"]["input_tokens"] == 10
     history = captured[0]["contents"]
     function_responses = [
@@ -157,6 +162,58 @@ async def test_gemini_chat_maps_function_call_and_history(monkeypatch: pytest.Mo
     assert len(function_responses) == 2
     assert history[-1]["role"] == "user"
     assert len(history[-1]["parts"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_gemini_thought_signature_survives_the_next_tool_round_trip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = ProviderGateway(ProviderSettings.from_payload({
+        "provider": "gemini", "model": "gemini-3.8-flash", "api_key": "dummy-key",
+    }))
+    captured: list[dict[str, Any]] = []
+    responses = [
+        {
+            "candidates": [{"content": {"parts": [{
+                "functionCall": {"name": "get_system_metrics", "args": {}},
+                "thoughtSignature": "opaque-signature-must-not-change",
+            }]}}],
+        },
+        {"candidates": [{"content": {"parts": [{"text": "CPU usage is 12%."}]}}]},
+    ]
+
+    def fake_request(_method: str, _path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        assert payload is not None
+        captured.append(payload)
+        return responses.pop(0)
+
+    monkeypatch.setattr(gateway, "_request", fake_request)
+    first = await gateway.chat([{"role": "user", "content": "Check CPU"}], [])
+    assistant_message = first["message"]
+    tool_call = assistant_message["tool_calls"][0]
+    next_messages = [
+        {"role": "user", "content": "Check CPU"},
+        assistant_message,
+        {
+            "role": "tool",
+            "tool_name": "get_system_metrics",
+            "tool_call_id": tool_call["id"],
+            "content": '{"cpuUsagePercent":12}',
+        },
+    ]
+
+    # Simulate the same validation applied to every subsequent browser request.
+    from linux_mcp_agent.agent import clean_messages
+    cleaned = clean_messages(next_messages)
+    second = await gateway.chat(cleaned, [])
+    assert second["message"]["content"] == "CPU usage is 12%."
+
+    replayed_part = captured[1]["contents"][1]["parts"][0]
+    assert replayed_part["functionCall"] == {
+        "name": "get_system_metrics",
+        "args": {},
+    }
+    assert replayed_part["thoughtSignature"] == "opaque-signature-must-not-change"
 
 
 @pytest.mark.asyncio
@@ -180,6 +237,10 @@ async def test_anthropic_chat_normalizes_tool_use(monkeypatch: pytest.MonkeyPatc
     }])
     assert result["message"]["tool_calls"][0]["id"] == "toolu_123"
     assert captured[0]["tools"][0]["name"] == "get_system_metrics"
+    assert captured[0]["tools"][0]["input_schema"] == {
+        "type": "object", "properties": {},
+    }
+    assert "parameters" not in captured[0]["tools"][0]
     assert result["usage"]["output_tokens"] == 2
 
 
