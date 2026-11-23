@@ -60,7 +60,15 @@ export class McpClient {
         signal: AbortSignal.timeout(15000), cache: 'no-store', redirect: 'error',
       });
       if (!response.ok) {
-        const messages = { 401: 'Cần Bearer token hợp lệ để kết nối.', 403: 'Truy cập bị từ chối. Kiểm tra scope token và Origin được cho phép.', 404: 'Phiên MCP đã hết hạn hoặc endpoint không tồn tại. Hãy kết nối lại.', 421: 'Host không được phép. Kiểm tra MCP_ALLOWED_HOSTS.' };
+        const messages = {
+          401: 'Cần Bearer token Keycloak còn hiệu lực để kết nối.',
+          403: 'Truy cập bị từ chối. Kiểm tra scope mcp.read và cấu hình Origin.',
+          404: 'Endpoint MCP không tồn tại hoặc phiên đã hết hạn. Hãy kết nối lại.',
+          421: 'Host không được phép. Kiểm tra MCP_ALLOWED_HOSTS.',
+          502: 'Caddy không kết nối được MCP backend. Kiểm tra MCP service, MCP_PORT và MCP_UPSTREAM.',
+          503: 'MCP backend hiện không khả dụng. Kiểm tra trạng thái linux-mcp-agent.service.',
+          504: 'MCP backend quá thời gian phản hồi qua Caddy. Kiểm tra log và tải hệ thống.'
+        };
         throw new McpError(messages[response.status] || `Server trả về HTTP ${response.status}.`, response.status);
       }
       if (generation !== this.generation) throw new McpError('Kết nối đã thay đổi.');
@@ -85,7 +93,10 @@ export class McpClient {
     } catch (error) {
       this.onActivity({ method, ok: false, ms: performance.now() - started });
       if (error instanceof McpError) throw error;
-      throw new McpError(error.name === 'TimeoutError' ? 'Server phản hồi quá chậm. Hãy thử lại.' : 'Không thể liên lạc với MCP Server. Kiểm tra server và kết nối lại.', -1);
+      const detail = error?.name === 'TimeoutError' || error?.name === 'AbortError'
+        ? 'Yêu cầu MCP hết thời gian chờ. Kiểm tra trạng thái server và thử lại.'
+        : 'Trình duyệt không thiết lập được kết nối tới /mcp. Kiểm tra HTTPS certificate trên thiết bị này, DNS mcp.home.arpa và cổng 443/Caddy.';
+      throw new McpError(detail, -1);
     }
   }
 
