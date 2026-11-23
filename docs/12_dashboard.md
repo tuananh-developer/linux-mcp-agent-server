@@ -7,6 +7,8 @@ The browser dashboard is served at / and /dashboard; the optional AI assistant i
 - The browser creates a same-origin MCP Streamable HTTP client for /mcp.
 - It discovers the MCP tool registry and requires all eight read-only tools before marking the dashboard connected.
 - The overview periodically invokes get_system_metrics, get_disk_usage, list_processes, get_network_stats, get_system_alerts, get_service_status, and check_port.
+- The process table can be sorted by CPU or RAM and filtered by process name. The service, single-port, and log panels remain explicit, read-only checks.
+- HTTP 502/503/504 responses identify the Caddy-to-MCP upstream problem instead of showing a generic connection failure. Partial failures remain visible per dashboard panel.
 - Recent journal access is separate and is only attempted after the user presses the log button. It still requires the server journal alias allowlist and the mcp.logs.read scope.
 - The AI assistant supports Google Gemini, OpenAI, Anthropic Claude, and Ollama. The user selects a provider/model in the browser and tests the credential before chatting.
 - The model gateway converts provider-specific tool calls into one bounded internal format. Tool execution still happens through the same authenticated MCP client and only uses tools advertised by the server.
@@ -24,7 +26,9 @@ The browser dashboard is served at / and /dashboard; the optional AI assistant i
 
 ## Run
 
-Start the normal MCP and Caddy deployment, then open https://mcp.home.arpa/ in a browser that trusts the Caddy local CA. The assistant is at https://mcp.home.arpa/assistant.
+Run `bash scripts/start-demo.sh`. It ensures the local MCP health check passes, configures Caddy to proxy to the actual MCP_PORT, exports the Caddy root CA, and verifies the HTTPS /healthz route before reporting the dashboard URLs. Open `https://mcp.home.arpa/dashboard`; the assistant is at `https://mcp.home.arpa/assistant`.
+
+The browser device must trust the Caddy local root CA. The startup helper exports it to `~/.config/linux-mcp-agent/caddy-root.crt`. Transfer that file to the browser device, then run `bash scripts/install-caddy-ca.sh` there and restart the browser. To export it again later, run `bash scripts/export-caddy-ca.sh`.
 
 In Keycloak mode, obtain an access token with the MCP resource and mcp.read scope, then use Cấu hình MCP to paste it. The token remains in the current tab only. A separate mcp.logs.read scope is required for the log panel.
 
