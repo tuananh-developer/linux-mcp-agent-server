@@ -28,7 +28,7 @@ The AI assistant is optional and supports user-selected Gemini, OpenAI, Anthropi
 ## Architecture
 
 - Python MCP service runs natively on the Linux host under systemd and binds to `127.0.0.1:3002`.
-- Caddy 2.11.7 terminates TLS and exposes only the MCP endpoint and required protected-resource metadata route to the LAN.
+- Caddy 2.11.7 terminates TLS and exposes the read-only dashboard, assistant, MCP endpoint, health check, and required protected-resource metadata route to the LAN.
 - Keycloak 26.8.1 issues OAuth access tokens; the MCP service validates them using RFC 7662 introspection and exact issuer/resource/audience/scope checks.
 - PostgreSQL 18.6 stores Keycloak data only. It is not an application database.
 - Docker Compose 5.6.1 runs Caddy, Keycloak and PostgreSQL; the MCP service is not containerized.
