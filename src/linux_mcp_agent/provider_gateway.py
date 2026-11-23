@@ -198,13 +198,21 @@ class ProviderGateway:
         ]
 
     @staticmethod
-    def _tool_call(name: str, arguments: object, call_id: str) -> dict[str, Any]:
+    def _tool_call(
+        name: str,
+        arguments: object,
+        call_id: str,
+        provider_metadata: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         if not isinstance(arguments, dict):
             raise AgentError("Model trả về tham số tool không hợp lệ.")
-        return {
+        call: dict[str, Any] = {
             "id": call_id,
             "function": {"name": name, "arguments": arguments},
         }
+        if provider_metadata:
+            call["provider_metadata"] = provider_metadata
+        return call
 
     def _chat_openai(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
@@ -236,7 +244,7 @@ class ProviderGateway:
         payload: dict[str, Any] = {
             "model": self.settings.model,
             "messages": wire_messages,
-            "max_tokens": 1536,
+            "max_completion_tokens": 1536,
             "tool_choice": "auto",
             "parallel_tool_calls": False,
         }
@@ -305,10 +313,16 @@ class ProviderGateway:
                     parts.append({"text": message["content"]})
                 for call in message.get("tool_calls", []):
                     function = call["function"]
-                    parts.append({"functionCall": {
+                    part: dict[str, Any] = {"functionCall": {
                         "name": function["name"],
                         "args": function["arguments"],
-                    }})
+                    }}
+                    metadata = call.get("provider_metadata", {})
+                    if isinstance(metadata, dict):
+                        signature = metadata.get("gemini_thought_signature")
+                        if isinstance(signature, str):
+                            part["thoughtSignature"] = signature
+                    parts.append(part)
                 contents.append({"role": "model", "parts": parts})
             else:
                 try:
@@ -371,7 +385,15 @@ class ProviderGateway:
                 if not isinstance(function_name, str):
                     raise AgentError("Gemini trả về function call không hợp lệ.")
                 function_args: object = function.get("args", {})
-                calls.append(self._tool_call(function_name, function_args, f"gemini_{index}"))
+                signature = part.get("thoughtSignature", part.get("thought_signature"))
+                metadata = (
+                    {"gemini_thought_signature": signature}
+                    if isinstance(signature, str)
+                    else None
+                )
+                calls.append(
+                    self._tool_call(function_name, function_args, f"gemini_{index}", metadata)
+                )
         normalized = clean_messages([{
             "role": "assistant",
             "content": "\n".join(texts),
@@ -431,7 +453,16 @@ class ProviderGateway:
             "messages": self._anthropic_history(messages),
         }
         if tools:
-            payload["tools"] = self._tool_defs(tools)
+            payload["tools"] = [
+                {
+                    "name": item["function"]["name"],
+                    "description": item["function"].get("description", ""),
+                    "input_schema": item["function"].get(
+                        "parameters", {"type": "object", "properties": {}}
+                    ),
+                }
+                for item in tools
+            ]
         result = self._request("POST", "/messages", payload)
         blocks_raw = result.get("content")
         if not isinstance(blocks_raw, list):
