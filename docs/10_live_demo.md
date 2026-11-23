@@ -40,12 +40,12 @@ In terminal 1, from the repository root:
 
     bash scripts/start-demo.sh
 
-The helper validates the Compose configuration, starts PostgreSQL and Keycloak, waits for Keycloak's health check, and starts Caddy's LAN profile. It then:
-- reuses the MCP service if its local health endpoint is already responding;
-- restarts the installed linux-mcp-agent systemd service when available; or
-- launches uv run linux-mcp-agent in the foreground using ~/.config/linux-mcp-agent/server.env.
+The helper validates the Compose configuration, starts PostgreSQL and Keycloak, ensures the MCP service is healthy, then starts Caddy with the matching MCP upstream port. It supports:
+- reusing an already healthy MCP process;
+- restarting the installed linux-mcp-agent systemd service when needed; or
+- launching the app in the background when no systemd unit is installed.
 
-When the helper launches the app in the foreground, leave terminal 1 running during the demo.
+It then exports the Caddy local root CA to ~/.config/linux-mcp-agent/caddy-root.crt and verifies the HTTPS /healthz route end to end. For a locally launched background process, inspect logs with `tail -f ~/.local/state/linux-mcp-agent/demo-server.log` and stop it with `bash scripts/stop-demo.sh`.
 
 ## 3. Run the live acceptance client
 
