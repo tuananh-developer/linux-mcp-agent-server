@@ -50,6 +50,17 @@ test('surfaces auth errors without reading or logging response bodies', async t 
   assert.equal(activities[0].ok, false);
 });
 
+test('explains Caddy 502 as an MCP upstream problem', async t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response('Bad Gateway', { status: 502 }));
+  const client = new McpClient('/mcp');
+  await assert.rejects(
+    client.request('tools/list'),
+    error => error instanceof McpError
+      && error.status === 502
+      && error.message.includes('MCP_UPSTREAM')
+  );
+});
+
 test('rejects a tool error instead of treating it as healthy telemetry', async t => {
   t.mock.method(globalThis, 'fetch', async () => response({ isError: true, content: [{ type: 'text', text: 'INSUFFICIENT_SCOPE' }] }, 1));
   await assert.rejects(new McpClient('/mcp').callTool('read_allowed_log'), /INSUFFICIENT_SCOPE/);
