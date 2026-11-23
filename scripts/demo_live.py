@@ -12,6 +12,7 @@ import json
 import os
 import shlex
 import ssl
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -63,19 +64,78 @@ def load_env_file(path: Path) -> None:
         os.environ[key] = " ".join(parts)
 
 
-def make_opener(ca_cert: str | None, insecure: bool):
-    """Build a direct HTTP opener; local .home.arpa traffic must not use proxies."""
-    if insecure:
-        context = ssl._create_unverified_context()
-    elif ca_cert:
-        try:
-            context = ssl.create_default_context(cafile=ca_cert)
-        except OSError as exc:
-            raise DemoError(f"Cannot load CA certificate {ca_cert}: {exc}") from exc
-    else:
-        context = ssl.create_default_context()
+def discover_caddy_root_ca(repo_root: Path) -> str | None:
+    """Read Caddy's local root CA from the running Compose service, if available."""
+    compose_file = repo_root / "deploy/compose/compose.yaml"
+    if not compose_file.is_file():
+        return None
 
-    return build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+    compose_env = Path(
+        os.getenv(
+            "LINUX_MCP_COMPOSE_ENV_FILE",
+            str(repo_root / "deploy/compose/.env"),
+        )
+    ).expanduser()
+
+    command = ["docker", "compose"]
+    if compose_env.is_file():
+        command.extend(["--env-file", str(compose_env)])
+    command.extend(
+        [
+            "-f",
+            str(compose_file),
+            "--profile",
+            "lan",
+            "exec",
+            "-T",
+            "caddy",
+            "cat",
+            "/data/caddy/pki/authorities/local/root.crt",
+        ]
+    )
+
+    try:
+        result = subprocess.run(
+            command,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=8,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    certificate = result.stdout.strip()
+    if result.returncode != 0 or "-----BEGIN CERTIFICATE-----" not in certificate:
+        return None
+    return certificate + "\n"
+
+
+def make_opener(ca_cert: str | None, repo_root: Path) -> tuple[Any, str]:
+    """Build a verified HTTPS opener; local .home.arpa traffic must not use proxies."""
+    configured_ca = ca_cert or os.getenv("MCP_DEMO_CA_CERT")
+    if configured_ca:
+        ca_path = Path(configured_ca).expanduser()
+        try:
+            context = ssl.create_default_context(cafile=str(ca_path))
+        except (OSError, ssl.SSLError) as exc:
+            raise DemoError(f"Cannot load CA certificate {ca_path}: {exc}") from exc
+        trust_source = f"CA certificate file: {ca_path}"
+    else:
+        caddy_root_ca = discover_caddy_root_ca(repo_root)
+        if caddy_root_ca:
+            try:
+                context = ssl.create_default_context(cadata=caddy_root_ca)
+            except ssl.SSLError as exc:
+                raise DemoError(f"Caddy root CA is invalid: {exc}") from exc
+            trust_source = "Caddy internal root CA (read from Docker Compose)"
+        else:
+            context = ssl.create_default_context()
+            trust_source = "system certificate store"
+
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+    return opener, trust_source
 
 
 def read_json_response(response: Any, *, context: str) -> dict[str, Any]:
@@ -142,6 +202,11 @@ def request_access_token(
     except HTTPError as exc:
         raise DemoError(f"Keycloak token request failed with HTTP {exc.code}") from None
     except URLError as exc:
+        if isinstance(exc.reason, ssl.SSLCertVerificationError):
+            raise DemoError(
+                "Keycloak TLS certificate is not trusted. The script can read the Caddy "
+                "root CA from Docker Compose, or use --ca-cert /path/to/root.crt."
+            ) from None
         raise DemoError(f"Cannot reach Keycloak token endpoint: {exc.reason}") from None
     except TimeoutError:
         raise DemoError("Keycloak token request timed out") from None
@@ -234,7 +299,7 @@ class StreamableHttpMcpClient:
             if isinstance(reason, ssl.SSLCertVerificationError):
                 raise DemoError(
                     "TLS certificate is not trusted. Install the Caddy local root CA, "
-                    "or use --insecure only for this isolated local demo."
+                    "or pass --ca-cert /path/to/root.crt (or set MCP_DEMO_CA_CERT)."
                 ) from None
             raise DemoError(f"Cannot reach MCP endpoint: {reason}") from None
         except TimeoutError:
@@ -522,11 +587,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--endpoint", help="Override the MCP Streamable HTTP endpoint.")
     parser.add_argument("--token-url", help="Override the Keycloak token endpoint.")
     parser.add_argument("--resource", help="Override the OAuth resource indicator.")
-    parser.add_argument("--ca-cert", help="Caddy root CA certificate in PEM format.")
     parser.add_argument(
-        "--insecure",
-        action="store_true",
-        help="Disable TLS certificate verification (local isolated demo only).",
+        "--ca-cert",
+        help="Caddy root CA certificate in PEM format (overrides automatic discovery).",
     )
     parser.add_argument("--timeout", type=float, default=15.0, help="HTTP timeout in seconds.")
     return parser.parse_args()
@@ -548,15 +611,15 @@ def main() -> int:
         return 2
 
     try:
-        opener = make_opener(args.ca_cert, args.insecure)
-        if args.insecure:
-            print(
-                "WARNING: TLS certificate verification is disabled for this demo session."
-            )
+        opener, tls_source = make_opener(
+            args.ca_cert,
+            Path(__file__).resolve().parents[1],
+        )
         print("Linux MCP Agent Server — live acceptance demo")
         print(f"MCP endpoint: {endpoint}")
         print(f"Keycloak issuer: {issuer}")
         print(f"Resource indicator: {resource}")
+        print(f"TLS verification: enabled ({tls_source})")
         print("\n--- Keycloak client credentials flow ---")
         token, granted_scope = request_access_token(
             opener,
