@@ -52,6 +52,7 @@ def test_ollama_rejects_non_loopback_or_non_origin_urls(url: str) -> None:
     ("provider", "path", "listing", "expected"),
     [
         ("openai", "/models", {"data": [{"id": "gpt-4.1-mini"}]}, "gpt-4.1-mini"),
+        ("openrouter", "/models", {"data": [{"id": "nvidia/nemotron-3-ultra-550b-a55b:free"}]}, "nvidia/nemotron-3-ultra-550b-a55b:free"),
         ("anthropic", "/models", {"data": [{"id": "claude-sonnet-4-6"}]}, "claude-sonnet-4-6"),
         ("gemini", "/models", {"models": [
             {"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]},
@@ -118,6 +119,52 @@ async def test_openai_chat_normalizes_function_calls(monkeypatch: pytest.MonkeyP
     assert captured[0]["max_completion_tokens"] == 1536
     assert "max_tokens" not in captured[0]
     assert "dummy-key" not in str(result)
+
+
+def test_openrouter_uses_openai_compatible_endpoint_and_headers() -> None:
+    settings = ProviderSettings.from_payload({
+        "provider": "openrouter",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "api_key": "openrouter-test-key",
+    })
+    gateway = ProviderGateway(settings)
+    assert gateway.base_url == "https://openrouter.ai/api/v1"
+    headers = gateway._headers()
+    assert headers["Authorization"] == "Bearer openrouter-test-key"
+    assert headers["HTTP-Referer"] == "https://mcp.home.arpa"
+    assert headers["X-Title"] == "Linux Observatory"
+
+
+@pytest.mark.asyncio
+async def test_openrouter_chat_normalizes_tool_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    gateway = ProviderGateway(ProviderSettings.from_payload({
+        "provider": "openrouter",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "api_key": "dummy-openrouter-key",
+    }))
+    captured: list[dict[str, Any]] = []
+
+    def fake_request(_method: str, _path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        assert payload is not None
+        captured.append(payload)
+        return {
+            "choices": [{"message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "call_cpu", "function": {
+                    "name": "get_system_metrics", "arguments": "{}",
+                }}],
+            }}],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+        }
+
+    monkeypatch.setattr(gateway, "_request", fake_request)
+    result = await gateway.chat([{"role": "user", "content": "Check CPU"}], [])
+    assert result["message"]["tool_calls"][0]["id"] == "call_cpu"
+    assert captured[0]["model"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert captured[0]["max_tokens"] == 1536
+    assert "max_completion_tokens" not in captured[0]
+    assert result["usage"] == {"input_tokens": 12, "output_tokens": 3}
 
 
 @pytest.mark.asyncio
