@@ -47,6 +47,10 @@ The helper validates the Compose configuration, starts PostgreSQL and Keycloak, 
 
 It then exports the Caddy local root CA to ~/.config/linux-mcp-agent/caddy-root.crt and verifies the HTTPS /healthz route end to end. For a locally launched background process, inspect logs with `tail -f ~/.local/state/linux-mcp-agent/demo-server.log` and stop it with `bash scripts/stop-demo.sh`.
 
+Before opening the dashboard for the first time, create a human login user in the `linux-agent` realm using the Keycloak Admin Console at `https://auth.home.arpa/admin/`. Demo startup automatically provisions the public PKCE browser client; it does not create a user or set a default password.
+
+Open `https://mcp.home.arpa/dashboard` or `https://mcp.home.arpa/assistant` in the browser inside the VM. Select **Đăng nhập bằng Keycloak** when prompted. The browser performs the OAuth PKCE flow and refreshes access tokens automatically while the SSO session is active; do not run a token curl command or paste a Bearer token into the page.
+
 ## 3. Run the live acceptance client
 
 Open terminal 2 at the repository root:
