@@ -177,6 +177,14 @@ fi
 systemctl enable --now docker
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
 docker info >/dev/null 2>&1 || die "Docker daemon is not ready."
+if [[ "$RESUME" == "false" ]]; then
+  if systemctl cat linux-mcp-agent.service >/dev/null 2>&1; then
+    die "linux-mcp-agent.service already exists. Inspect the existing deployment instead of replacing it."
+  fi
+  if docker volume inspect linux-mcp-agent-infrastructure_keycloak-postgres >/dev/null 2>&1; then
+    die "An existing Keycloak database volume was found. Use --resume with the matching protected config; refusing to initialize over existing data."
+  fi
+fi
 
 log "Installing pinned uv"
 if ! command -v uv >/dev/null 2>&1 || [[ "$(uv --version | awk '{print $2}')" != "$UV_VERSION" ]]; then
