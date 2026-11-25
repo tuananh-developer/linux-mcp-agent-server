@@ -125,9 +125,11 @@ ensure_mcp_running() {
   if [[ ! -e "$vault_key" ]]; then
     umask 077
     head -c 32 /dev/urandom >"$vault_key"
-    chmod 600 "$vault_key"
     printf 'Created a per-installation provider vault key: %s\n' "$vault_key"
   fi
+  [[ -f "$vault_key" && ! -L "$vault_key" && "$(stat -c '%s' "$vault_key")" == "32" ]] ||
+    fail "Provider vault key must be a regular 32-byte file: $vault_key"
+  chmod 600 "$vault_key"
   export PROVIDER_VAULT_KEY_FILE="$vault_key"
   export PROVIDER_VAULT_FILE="$STATE_DIR/provider-credentials.json"
 
