@@ -108,3 +108,13 @@ def test_renderer_rejects_invalid_hostname(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert "valid DNS hostnames" in result.stderr
     assert not output.exists()
+
+def test_browser_client_setup_attaches_basic_scope_for_existing_realms() -> None:
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts/configure-browser-client.sh").read_text(encoding="utf-8")
+
+    # The startup configurator must repair already-imported realms as well as
+    # fresh imports; basic contains Keycloak's Subject (sub) mapper.
+    assert "for SCOPE_NAME in basic mcp.read mcp.logs.read; do" in script
+    assert "RELATION=default-client-scopes" in script
+    assert "basic + mcp.read default" in script
