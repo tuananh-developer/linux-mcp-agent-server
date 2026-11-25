@@ -7,6 +7,7 @@ from urllib.error import HTTPError
 
 import httpx2
 import pytest
+from pathlib import Path
 from mcp.server.auth.provider import AccessToken
 
 from linux_mcp_agent.agent import AgentError, clean_messages
@@ -539,7 +540,7 @@ async def test_per_request_provider_routes_work_when_legacy_agent_is_disabled(
 @pytest.mark.asyncio
 async def test_encrypted_provider_credentials_are_scoped_to_keycloak_subject(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Any,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("AUTH_MODE", "keycloak")
     monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "test-client")
@@ -550,6 +551,7 @@ async def test_encrypted_provider_credentials_are_scoped_to_keycloak_subject(
     monkeypatch.setenv("PROVIDER_VAULT_FILE", str(tmp_path / "provider-credentials.json"))
     monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
     (tmp_path / "vault.key").write_bytes(b"v" * 32)
+    (tmp_path / "vault.key").chmod(0o600)
 
     async def verify(_self: object, token: str) -> AccessToken | None:
         if token not in {"user-a", "user-b"}:
