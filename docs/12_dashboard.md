@@ -32,7 +32,13 @@ Run `bash scripts/start-demo.sh`. It ensures the local MCP health check passes, 
 
 The browser device must trust the Caddy local root CA. The startup helper exports it to `~/.config/linux-mcp-agent/caddy-root.crt`. Transfer that file to the browser device, then run `bash scripts/install-caddy-ca.sh` there and restart the browser. To export it again later, run `bash scripts/export-caddy-ca.sh`.
 
-In Keycloak mode, obtain an access token with the MCP resource and mcp.read scope, then use Cấu hình MCP to paste it. The token remains in the current tab only. A separate mcp.logs.read scope is required for the log panel.
+Keycloak login is handled by the browser through Authorization Code + PKCE (S256). `scripts/start-demo.sh` creates or updates the public `linux-observatory-browser` client in the existing realm, including its redirect origin, CORS origin, `mcp.read` scope and MCP audience mapper. The user clicks **Đăng nhập bằng Keycloak**; no CLI token request or copy/paste is required.
+
+Create a normal user once in the `linux-agent` realm from the Keycloak Admin Console (`https://auth.home.arpa/admin/`): select realm `linux-agent`, create a user, set a non-temporary password, and keep self-registration disabled. The account is used only for browser sign-in; the MCP server still validates the audience and `mcp.read` scope through its private introspection client.
+
+The browser keeps access and refresh tokens in JavaScript memory and refreshes the access token before expiry while the Keycloak session remains valid. Only the short-lived PKCE state/verifier transaction is kept in `sessionStorage` across the redirect; tokens are never persisted there, in localStorage, cookies or the database. Reloading the page restarts the redirect flow; an active Keycloak SSO session normally avoids re-entering credentials. Disconnect clears the in-memory tokens.
+
+The browser requests `mcp.logs.read` as an optional scope. Journal data is still read only after the user explicitly clicks the log button.
 
 For AI chat, connect MCP, choose Gemini, OpenAI, Anthropic, or Ollama in the Nhà cung cấp AI panel, enter a model ID and (for hosted providers) your own API key, then select Kiểm tra kết nối. The gateway lists the models available to that credential and confirms whether the selected model is available. Ollama requires no API key and must be listening on the MCP host loopback address. Provider keys are not saved; re-enter them after refreshing the page or disconnecting. Provider usage may incur charges according to the provider's billing plan.
 
