@@ -208,6 +208,9 @@ printf '== 1/3 Start PostgreSQL and Keycloak ==\n'
 "${compose[@]}" up -d postgres keycloak
 wait_for_keycloak
 
+printf '\n== Configure browser Keycloak login ==\n'
+bash "$ROOT/scripts/configure-browser-client.sh"
+
 printf '\n== 2/3 Ensure MCP is healthy ==\n'
 ensure_mcp_running
 
