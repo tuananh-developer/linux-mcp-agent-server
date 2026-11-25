@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from email.message import Message
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 
 import httpx2
 import pytest
-from pathlib import Path
 from mcp.server.auth.provider import AccessToken
 
 from linux_mcp_agent.agent import AgentError, clean_messages
