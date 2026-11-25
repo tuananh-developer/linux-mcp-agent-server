@@ -149,7 +149,7 @@ class ProviderGateway:
                 pass
             if self.settings.api_key and detail:
                 detail = detail.replace(self.settings.api_key, "[đã ẩn]")
-            detail = re.sub(r"\\s+", " ", detail).strip()[:500]
+            detail = re.sub(r"\s+", " ", detail).strip()[:500]
             message = messages.get(exc.code, f"Nhà cung cấp AI trả về HTTP {exc.code}.")
             if exc.code == 400 and detail:
                 message = f"{message} Chi tiết từ nhà cung cấp: {detail}"
