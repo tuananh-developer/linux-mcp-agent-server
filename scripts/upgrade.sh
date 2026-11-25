@@ -37,6 +37,7 @@ rsync -a --delete \
   --exclude='/.pytest_cache/' --exclude='/.ruff_cache/' \
   --exclude='/.env' --exclude='/deploy/compose/.env' --exclude='__pycache__/' \
   "$ROOT/" "$INSTALL_DIR/"
+chown -R root:root "$INSTALL_DIR"
 
 export UV_PYTHON_INSTALL_DIR="$INSTALL_DIR/.uv-python"
 export UV_CACHE_DIR="/var/cache/linux-mcp-agent/uv"
@@ -58,12 +59,20 @@ systemctl restart linux-mcp-agent.service
 docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" --profile lan \
   up -d --force-recreate caddy
 
-curl --silent --show-error --fail --max-time 5 \
-  http://127.0.0.1:3002/healthz >/dev/null || {
-    systemctl status linux-mcp-agent.service --no-pager -l >&2 || true
-    journalctl -u linux-mcp-agent.service -n 60 --no-pager >&2 || true
-    die "MCP health check failed after upgrade."
-  }
+MCP_READY=false
+for _ in $(seq 1 30); do
+  if curl --silent --show-error --fail --max-time 2 \
+    http://127.0.0.1:3002/healthz >/dev/null 2>&1; then
+    MCP_READY=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$MCP_READY" != "true" ]]; then
+  systemctl status linux-mcp-agent.service --no-pager -l >&2 || true
+  journalctl -u linux-mcp-agent.service -n 60 --no-pager >&2 || true
+  die "MCP health check failed after upgrade."
+fi
 
 curl --silent --show-error --fail --max-time 5 \
   --cacert "$CONFIG_DIR/caddy-root.crt" \
