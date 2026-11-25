@@ -72,6 +72,15 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
     assert browser["webOrigins"] == ["https://observatory.example.test"]
     assert {"basic", "mcp.read"} <= set(browser["defaultClientScopes"])
 
+    client_scopes = {scope["name"]: scope for scope in realm["clientScopes"]}
+    basic_scope = client_scopes["basic"]
+    assert any(
+        mapper["protocolMapper"] == "oidc-sub-mapper"
+        and mapper["config"]["access.token.claim"] == "true"
+        and mapper["config"]["introspection.token.claim"] == "true"
+        for mapper in basic_scope["protocolMappers"]
+    )
+
 
 def test_renderer_rejects_invalid_hostname(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
@@ -113,8 +122,11 @@ def test_browser_client_setup_attaches_basic_scope_for_existing_realms() -> None
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts/configure-browser-client.sh").read_text(encoding="utf-8")
 
-    # The startup configurator must repair already-imported realms as well as
-    # fresh imports; basic contains Keycloak's Subject (sub) mapper.
+    # Existing custom realms may not contain Keycloak's built-in basic scope.
+    # Startup must create it and install the Subject mapper before attaching it.
+    assert 'if [[ -z "$BASIC_SCOPE_ID" ]]; then' in script
+    assert '"$KCADM" create client-scopes -r "$REALM"' in script
+    assert "protocolMapper=oidc-sub-mapper" in script
     assert "for SCOPE_NAME in basic mcp.read mcp.logs.read; do" in script
     assert "RELATION=default-client-scopes" in script
     assert "basic + mcp.read default" in script
