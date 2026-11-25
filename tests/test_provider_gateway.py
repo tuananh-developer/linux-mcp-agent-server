@@ -85,7 +85,7 @@ async def test_connection_check_lists_models(
     result = await gateway.test_connection()
     assert result["available"] is True
     assert result["model"] == expected
-    assert result["models"] == [expected]
+    assert result["models"] == ([expected, "openrouter/free"] if provider == "openrouter" else [expected])
     assert seen == [("GET", path)]
     assert "dummy-provider-key" not in str(result)
 
