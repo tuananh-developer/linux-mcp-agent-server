@@ -15,6 +15,7 @@ sudo install -d -o root -g linux-mcp-agent -m 0750 /etc/linux-mcp-agent
 sudo install -o root -g linux-mcp-agent -m 0640 deploy/systemd/server.env.example /etc/linux-mcp-agent/server.env
 sudo install -o root -g linux-mcp-agent -m 0640 config/log-sources.example.json /etc/linux-mcp-agent/log-sources.json
 sudo install -o root -g root -m 0644 deploy/systemd/linux-mcp-agent.service /etc/systemd/system/
+sudo bash /opt/linux-mcp-agent-server/scripts/init-provider-vault-key.sh
 ```
 
 Edit `/etc/linux-mcp-agent/server.env`; set `AUTH_MODE=keycloak`, real issuer/resource values, and the introspection client secret. Keep the file mode at `0640` and never commit it.
@@ -25,6 +26,13 @@ sudo uv sync --locked --no-dev
 sudo systemctl daemon-reload
 sudo systemctl enable --now linux-mcp-agent
 sudo systemctl status linux-mcp-agent
+curl -fsS http://127.0.0.1:3002/healthz
+```
+
+The unit uses `LoadCredential=` to pass `/etc/linux-mcp-agent/provider-vault.key` to the service in a private runtime credential directory. The setup script creates the key only when it does not already exist; it never overwrites an existing key. Encrypted credentials are stored under `/var/lib/linux-mcp-agent/`. Back up the master key separately from the encrypted store. Losing the master key makes all saved provider credentials unrecoverable. Each independently installed Linux Observatory server must use its own master key.
+
+```bash
+sudo systemctl restart linux-mcp-agent
 curl -fsS http://127.0.0.1:3002/healthz
 ```
 

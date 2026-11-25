@@ -20,6 +20,7 @@ from starlette.routing import Route
 
 from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
 from linux_mcp_agent.config import ConfigurationError, Settings
+from linux_mcp_agent.credential_vault import PROVIDERS, CredentialVault, CredentialVaultError
 
 SYSTEM_PROMPT = """You are the Linux Observatory assistant. Answer in the user's language.
 Use available MCP tools to observe real Linux data before making claims about this host.
@@ -243,9 +244,11 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
     verifier = KeycloakIntrospectionVerifier(settings) if settings.auth_mode == "keycloak" else None
     guard = TransportSecurityMiddleware(security)
     provider_limit = asyncio.Semaphore(2)
+    credential_vault = CredentialVault.from_environment()
 
     async def authorize(request: Request) -> JSONResponse | None:
-        rejected = await guard.validate_request(request, is_post=request.method == "POST")
+        request.state.access_token = None
+        rejected = await guard.validate_request(request, is_post=request.method not in {"GET", "HEAD"})
         if rejected is not None:
             return JSONResponse({"error": "Host or Origin is not allowed"}, status_code=rejected.status_code)
         if verifier is not None:
@@ -255,7 +258,38 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
                 return JSONResponse({"error": "Valid Bearer token required"}, status_code=401)
             if settings.required_scope not in token.scopes:
                 return JSONResponse({"error": "Missing required scope"}, status_code=403)
+            request.state.access_token = token
         return None
+
+    def subject_for(request: Request) -> str:
+        token = getattr(request.state, "access_token", None)
+        subject = getattr(token, "subject", None)
+        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+            raise AgentError("Không thể xác định tài khoản Keycloak cho credential.")
+        return subject
+
+    def provider_settings_for(request: Request, raw: object) -> ProviderSettings:
+        if not isinstance(raw, dict):
+            raise AgentError("Chưa có cấu hình nhà cung cấp AI.")
+        provider_config = cast(dict[str, Any], raw)
+        provider = provider_config.get("provider")
+        api_key = provider_config.get("api_key", "")
+        if provider == "ollama" or (api_key is not None and not isinstance(api_key, str)):
+            return ProviderSettings.from_payload(provider_config)
+        if isinstance(api_key, str) and api_key.strip():
+            return ProviderSettings.from_payload(provider_config)
+        if not isinstance(provider, str) or provider not in PROVIDERS:
+            raise AgentError("Nhà cung cấp AI không được hỗ trợ.")
+        if credential_vault is None:
+            raise AgentError("Chưa cấu hình encrypted provider vault trên MCP Server.")
+        saved = credential_vault.get(subject_for(request), provider)
+        if saved is None:
+            raise AgentError("Chưa có API key đã lưu cho provider này. Hãy nhập API key và kiểm tra kết nối.")
+        resolved: dict[str, Any] = dict(provider_config)
+        resolved["api_key"] = saved["api_key"]
+        if not resolved.get("model"):
+            resolved["model"] = saved["model"]
+        return ProviderSettings.from_payload(resolved)
 
     async def read_json_body(request: Request, max_bytes: int) -> dict[str, Any]:
         body = bytearray()
@@ -287,14 +321,67 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
             return denied
         try:
             payload = await read_json_body(request, 16_384)
-            provider_settings = ProviderSettings.from_payload(payload.get("provider_config"))
+            provider_settings = provider_settings_for(request, payload.get("provider_config"))
+            remember = payload.get("remember") is True and provider_settings.provider != "ollama"
+            if remember:
+                if settings.auth_mode != "keycloak" or credential_vault is None:
+                    return JSONResponse(
+                        {"error": "Encrypted provider vault chưa được cấu hình hoặc xác thực Keycloak đang tắt."},
+                        status_code=503,
+                        headers={"Cache-Control": "no-store"},
+                    )
+                subject = subject_for(request)
+            else:
+                subject = ""
             gateway = ProviderGateway(provider_settings)
             async with provider_limit:
                 result = await gateway.test_connection()
+            if remember and result.get("available") is True:
+                if credential_vault is None:
+                    raise AgentError("Encrypted provider vault chưa được cấu hình.")
+                credential_vault.put(
+                    subject, provider_settings.provider, provider_settings.model, provider_settings.api_key
+                )
+                result["credential_saved"] = True
+            else:
+                result["credential_saved"] = False
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
-        except AgentError as exc:
+        except (AgentError, CredentialVaultError) as exc:
             status_code = 413 if str(exc).startswith("Request vượt quá") else 400
             return JSONResponse({"error": str(exc)}, status_code=status_code, headers={"Cache-Control": "no-store"})
+
+    async def list_credentials(request: Request) -> JSONResponse:
+        if (denied := await authorize(request)) is not None:
+            return denied
+        if settings.auth_mode != "keycloak" or credential_vault is None:
+            return JSONResponse(
+                {"error": "Encrypted provider vault chưa được cấu hình hoặc xác thực Keycloak đang tắt."},
+                status_code=503,
+                headers={"Cache-Control": "no-store"},
+            )
+        try:
+            credentials = credential_vault.list_for_subject(subject_for(request))
+            return JSONResponse({"credentials": credentials}, headers={"Cache-Control": "no-store"})
+        except (AgentError, CredentialVaultError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400, headers={"Cache-Control": "no-store"})
+
+    async def delete_credential(request: Request) -> JSONResponse:
+        if (denied := await authorize(request)) is not None:
+            return denied
+        if settings.auth_mode != "keycloak" or credential_vault is None:
+            return JSONResponse(
+                {"error": "Encrypted provider vault chưa được cấu hình hoặc xác thực Keycloak đang tắt."},
+                status_code=503,
+                headers={"Cache-Control": "no-store"},
+            )
+        provider = request.path_params.get("provider", "")
+        if provider not in PROVIDERS:
+            return JSONResponse({"error": "Provider không hợp lệ."}, status_code=400, headers={"Cache-Control": "no-store"})
+        try:
+            deleted = credential_vault.delete(subject_for(request), provider)
+            return JSONResponse({"deleted": deleted}, headers={"Cache-Control": "no-store"})
+        except (AgentError, CredentialVaultError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400, headers={"Cache-Control": "no-store"})
 
     async def chat(request: Request) -> JSONResponse:
         if (denied := await authorize(request)) is not None:
@@ -305,7 +392,7 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
             allow_logs = payload.get("allow_logs") is True
             provider_payload = payload.get("provider_config")
             if provider_payload is not None:
-                provider_settings = ProviderSettings.from_payload(provider_payload)
+                provider_settings = provider_settings_for(request, provider_payload)
                 gateway: Any = ProviderGateway(provider_settings)
             else:
                 if not config.enabled:
@@ -317,12 +404,14 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
             async with provider_limit:
                 result = await gateway.chat(messages, tools)
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
-        except AgentError as exc:
+        except (AgentError, CredentialVaultError) as exc:
             status_code = 413 if str(exc).startswith("Request vượt quá") else 400
             return JSONResponse({"error": str(exc)}, status_code=status_code)
 
     return [
         Route("/agent/status", status, methods=["GET"]),
+        Route("/agent/credentials", list_credentials, methods=["GET"]),
+        Route("/agent/credentials/{provider:str}", delete_credential, methods=["DELETE"]),
         Route("/agent/test", test_provider, methods=["POST"]),
         Route("/agent/chat", chat, methods=["POST"]),
     ]

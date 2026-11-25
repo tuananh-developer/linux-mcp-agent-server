@@ -11,6 +11,10 @@ Group=linux-mcp-agent
 SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/linux-mcp-agent-server
 EnvironmentFile=/etc/linux-mcp-agent/server.env
+StateDirectory=linux-mcp-agent
+StateDirectoryMode=0700
+Environment=PROVIDER_VAULT_FILE=/var/lib/linux-mcp-agent/provider-credentials.json
+LoadCredential=provider-vault-key:/etc/linux-mcp-agent/provider-vault.key
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/linux-mcp-agent-server/.venv/bin/python -m linux_mcp_agent

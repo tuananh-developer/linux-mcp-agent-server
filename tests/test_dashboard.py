@@ -53,6 +53,14 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assert 'id="chat-form"' in assistant.text
         assert 'id="login-keycloak"' in assistant.text
         assert 'id="bearer-token"' not in assistant.text
+        assert 'id="agent-remember-key"' in assistant.text
+        assert 'id="agent-remember-key" type="checkbox"' in assistant.text
+        assert "Lưu API key đã mã hóa trên MCP Server" in assistant.text
+        agent_ui = await client.get("/dashboard/assets/agent-ui.js")
+        assert agent_ui.status_code == 200
+        assert "agent/credentials" in agent_ui.text
+        assert "localStorage" not in agent_ui.text
+        assert "credential_saved" in agent_ui.text
         for removed_screen in ("view-overview", "view-processes", "view-logs", "view-explorer"):
             assert f'id="{removed_screen}"' not in page.text
         assert "frame-ancestors 'none'" in page.headers["content-security-policy"]

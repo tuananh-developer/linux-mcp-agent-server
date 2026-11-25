@@ -469,6 +469,22 @@ main { padding-inline: var(--gutter); }
   outline-offset: 2px;
 }
 .provider-wide { grid-column: 1 / -1; }
+.provider-remember-label {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+  margin: 0 !important;
+  color: var(--text);
+  cursor: pointer;
+}
+.provider-grid .provider-remember-label input[type="checkbox"] {
+  flex: none;
+  width: 17px;
+  min-height: 17px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
 .provider-actions {
   margin-top: 12px;
   padding-top: 12px;

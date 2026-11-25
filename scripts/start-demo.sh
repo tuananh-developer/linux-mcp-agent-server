@@ -119,6 +119,20 @@ ensure_mcp_running() {
     rm -f "$PID_FILE"
   fi
 
+  mkdir -p "$CONFIG_DIR" "$STATE_DIR"
+  chmod 700 "$CONFIG_DIR" "$STATE_DIR"
+  local vault_key="$CONFIG_DIR/provider-vault.key"
+  if [[ ! -e "$vault_key" ]]; then
+    umask 077
+    head -c 32 /dev/urandom >"$vault_key"
+    printf 'Created a per-installation provider vault key: %s\n' "$vault_key"
+  fi
+  [[ -f "$vault_key" && ! -L "$vault_key" && "$(stat -c '%s' "$vault_key")" == "32" ]] ||
+    fail "Provider vault key must be a regular 32-byte file: $vault_key"
+  chmod 600 "$vault_key"
+  export PROVIDER_VAULT_KEY_FILE="$vault_key"
+  export PROVIDER_VAULT_FILE="$STATE_DIR/provider-credentials.json"
+
   local python_bin
   python_bin="$(uv run python -c 'import sys; print(sys.executable)')"
   printf 'Launching MCP in background with %s\n' "$SERVER_ENV_FILE"

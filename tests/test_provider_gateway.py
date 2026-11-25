@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from email.message import Message
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 
 import httpx2
 import pytest
+from mcp.server.auth.provider import AccessToken
 
 from linux_mcp_agent.agent import AgentError, clean_messages
 from linux_mcp_agent.config import Settings
@@ -533,3 +535,126 @@ async def test_per_request_provider_routes_work_when_legacy_agent_is_disabled(
         assert chatted.status_code == 200, chatted.text
         assert chatted.json()["message"]["content"] == "Ready"
         assert "ephemeral-test-secret" not in chatted.text
+
+
+@pytest.mark.asyncio
+async def test_encrypted_provider_credentials_are_scoped_to_keycloak_subject(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_ID", "test-client")
+    monkeypatch.setenv("MCP_INTROSPECTION_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("MCP_PORT", "3002")
+    monkeypatch.setenv("MCP_ALLOWED_HOSTS", "127.0.0.1:3002")
+    monkeypatch.setenv("PROVIDER_VAULT_KEY_FILE", str(tmp_path / "vault.key"))
+    monkeypatch.setenv("PROVIDER_VAULT_FILE", str(tmp_path / "provider-credentials.json"))
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    (tmp_path / "vault.key").write_bytes(b"v" * 32)
+    (tmp_path / "vault.key").chmod(0o600)
+
+    async def verify(_self: object, token: str) -> AccessToken | None:
+        if token not in {"user-a", "user-b"}:
+            return None
+        return AccessToken(
+            token=token,
+            client_id="browser",
+            scopes=["mcp.read"],
+            expires_at=9_999_999_999,
+            resource="https://mcp.home.arpa/mcp",
+            subject=token,
+        )
+
+    async def fake_test(self: ProviderGateway) -> dict[str, Any]:
+        return {
+            "provider": self.settings.provider,
+            "model": self.settings.model,
+            "available": True,
+            "models": [self.settings.model],
+            "message": "Ready",
+        }
+
+    async def fake_chat(
+        self: ProviderGateway, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        assert self.settings.api_key == "user-a-secret"
+        assert messages[0]["content"] == "Read CPU"
+        return {
+            "provider": self.settings.provider,
+            "model": self.settings.model,
+            "message": {"role": "assistant", "content": "OK", "tool_calls": []},
+        }
+
+    monkeypatch.setattr("linux_mcp_agent.auth.KeycloakIntrospectionVerifier.verify_token", verify)
+    monkeypatch.setattr(ProviderGateway, "test_connection", fake_test)
+    monkeypatch.setattr(ProviderGateway, "chat", fake_chat)
+    app = build_asgi_app(Settings.from_env())
+
+    async with app.router.lifespan_context(app), httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:3002"
+    ) as client:
+        base_headers = {
+            "Origin": "http://127.0.0.1:3002",
+            "Content-Type": "application/json",
+        }
+        user_a = {**base_headers, "Authorization": "Bearer user-a"}
+        user_b = {**base_headers, "Authorization": "Bearer user-b"}
+        provider_config = {
+            "provider": "openrouter",
+            "model": "openrouter/free",
+            "api_key": "user-a-secret",
+        }
+
+        tested = await client.post(
+            "/agent/test",
+            headers=user_a,
+            json={"provider_config": provider_config, "remember": True},
+        )
+        assert tested.status_code == 200, tested.text
+        assert tested.json()["credential_saved"] is True
+        assert "user-a-secret" not in tested.text
+
+        listed_a = await client.get("/agent/credentials", headers=user_a)
+        assert listed_a.status_code == 200, listed_a.text
+        assert listed_a.json()["credentials"] == [{
+            "provider": "openrouter",
+            "model": "openrouter/free",
+            "updated_at": listed_a.json()["credentials"][0]["updated_at"],
+        }]
+        assert "user-a-secret" not in listed_a.text
+
+        listed_b = await client.get("/agent/credentials", headers=user_b)
+        assert listed_b.status_code == 200
+        assert listed_b.json()["credentials"] == []
+
+        chatted = await client.post(
+            "/agent/chat",
+            headers=user_a,
+            json={
+                "provider_config": {"provider": "openrouter", "model": "openrouter/free"},
+                "messages": [{"role": "user", "content": "Read CPU"}],
+            },
+        )
+        assert chatted.status_code == 200, chatted.text
+        assert chatted.json()["message"]["content"] == "OK"
+
+        denied = await client.post(
+            "/agent/chat",
+            headers=user_b,
+            json={
+                "provider_config": {"provider": "openrouter", "model": "openrouter/free"},
+                "messages": [{"role": "user", "content": "Read CPU"}],
+            },
+        )
+        assert denied.status_code == 400
+        assert "Chưa có API key đã lưu" in denied.json()["error"]
+
+        deleted_by_b = await client.delete("/agent/credentials/openrouter", headers=user_b)
+        assert deleted_by_b.status_code == 200
+        assert deleted_by_b.json()["deleted"] is False
+        assert (await client.get("/agent/credentials", headers=user_a)).json()["credentials"]
+
+        deleted_by_a = await client.delete("/agent/credentials/openrouter", headers=user_a)
+        assert deleted_by_a.status_code == 200
+        assert deleted_by_a.json()["deleted"] is True
+        assert (await client.get("/agent/credentials", headers=user_a)).json()["credentials"] == []
