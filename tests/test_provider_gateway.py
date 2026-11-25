@@ -103,6 +103,32 @@ async def test_connection_check_lists_models(
     assert "dummy-provider-key" not in str(result)
 
 
+@pytest.mark.parametrize("selected_model", ["openrouter/free", "some/model-249"])
+@pytest.mark.asyncio
+async def test_openrouter_selected_model_and_free_router_survive_large_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+    selected_model: str,
+) -> None:
+    settings = ProviderSettings.from_payload({
+        "provider": "openrouter",
+        "model": selected_model,
+        "api_key": "dummy-openrouter-key",
+    })
+    gateway = ProviderGateway(settings)
+    listing = {"data": [{"id": f"some/model-{index}"} for index in range(250)]}
+
+    def fake_request(_method: str, _path: str, _payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        return listing
+
+    monkeypatch.setattr(gateway, "_request", fake_request)
+    result = await gateway.test_connection()
+
+    assert result["available"] is True
+    assert selected_model in result["models"]
+    assert "openrouter/free" in result["models"]
+    assert len(result["models"]) == 200
+
+
 @pytest.mark.asyncio
 async def test_openai_chat_normalizes_function_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     gateway = ProviderGateway(ProviderSettings.from_payload({
