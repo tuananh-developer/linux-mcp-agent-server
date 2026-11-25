@@ -232,7 +232,7 @@ class ProviderGateway:
         name: str,
         arguments: object,
         call_id: str,
-        provider_metadata: dict[str, Any] | None = None,
+        provider_metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         if not isinstance(arguments, dict):
             raise AgentError("Model trả về tham số tool không hợp lệ.")
@@ -252,16 +252,16 @@ class ProviderGateway:
             role = message["role"]
             if role == "assistant":
                 item: dict[str, Any] = {"role": "assistant", "content": message["content"] or None}
+                message_metadata = message.get("provider_metadata", {})
+                if (
+                    self.settings.provider == "openrouter"
+                    and isinstance(message_metadata, dict)
+                    and isinstance(message_metadata.get("openrouter_reasoning_details"), list)
+                ):
+                    item["reasoning_details"] = message_metadata["openrouter_reasoning_details"]
                 calls = []
                 for call_index, call in enumerate(message.get("tool_calls", [])):
                     function = call["function"]
-                    metadata = call.get("provider_metadata", {})
-                    if (
-                        self.settings.provider == "openrouter"
-                        and isinstance(metadata, dict)
-                        and isinstance(metadata.get("openrouter_reasoning_details"), list)
-                    ):
-                        item["reasoning_details"] = metadata["openrouter_reasoning_details"]
                     calls.append({
                         "id": call.get("id") or f"call_{index}_{call_index}",
                         "type": "function",
@@ -332,22 +332,26 @@ class ProviderGateway:
                 arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
             except json.JSONDecodeError:
                 raise AgentError("OpenAI trả về JSON arguments không hợp lệ.") from None
-            provider_metadata: dict[str, Any] | None = None
-            reasoning_details = message.get("reasoning_details")
-            if (
-                self.settings.provider == "openrouter"
-                and index == 0
-                and isinstance(reasoning_details, list)
-                and reasoning_details
-            ):
-                provider_metadata = {"openrouter_reasoning_details": reasoning_details}
             calls.append(self._tool_call(
                 str(function.get("name", "")),
                 arguments,
                 str(raw_call.get("id") or f"openai_{index}"),
-                provider_metadata,
             ))
-        normalized = clean_messages([{"role": "assistant", "content": content, "tool_calls": calls}])[0]
+        normalized_input: dict[str, Any] = {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": calls,
+        }
+        reasoning_details = message.get("reasoning_details")
+        if (
+            self.settings.provider == "openrouter"
+            and isinstance(reasoning_details, list)
+            and reasoning_details
+        ):
+            normalized_input["provider_metadata"] = {
+                "openrouter_reasoning_details": reasoning_details
+            }
+        normalized = clean_messages([normalized_input])[0]
         usage = result.get("usage", {})
         if not isinstance(usage, dict):
             usage = {}
