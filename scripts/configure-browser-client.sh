@@ -132,7 +132,7 @@ if ! grep -Fq 'mcp-resource-audience' <<<"$MAPPERS"; then
     -s protocol=openid-connect \
     -s protocolMapper=oidc-audience-mapper \
     -s consentRequired=false \
-    -s "config.\"included.custom.audience\"=$MCP_RESOURCE_URI" \\
+    -s "config.\"included.custom.audience\"=$MCP_RESOURCE_URI" \
     -s 'config."id.token.claim"=false' \
     -s 'config."access.token.claim"=true' \
     -s 'config."introspection.token.claim"=true' >/dev/null
