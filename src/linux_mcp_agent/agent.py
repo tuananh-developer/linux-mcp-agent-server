@@ -100,6 +100,28 @@ def clean_messages(raw: object) -> list[dict[str, Any]]:
         if not isinstance(content, str) or len(content) > 20000:
             raise AgentError("Message exceeds the text limit")
         message: dict[str, Any] = {"role": item["role"], "content": content}
+        if item["role"] == "assistant" and item.get("provider_metadata") is not None:
+            metadata_value = item["provider_metadata"]
+            if not isinstance(metadata_value, dict):
+                raise AgentError("Invalid provider metadata")
+            metadata = cast(dict[str, Any], metadata_value)
+            if set(metadata) != {"openrouter_reasoning_details"}:
+                raise AgentError("Invalid provider metadata")
+            reasoning_details = metadata.get("openrouter_reasoning_details")
+            if (
+                not isinstance(reasoning_details, list)
+                or any(not isinstance(detail, dict) for detail in reasoning_details)
+            ):
+                raise AgentError("Invalid provider metadata")
+            try:
+                encoded_details = json.dumps(reasoning_details, ensure_ascii=False).encode("utf-8")
+            except (TypeError, ValueError):
+                raise AgentError("Invalid provider metadata") from None
+            if len(encoded_details) > 131_072:
+                raise AgentError("Invalid provider metadata")
+            message["provider_metadata"] = {
+                "openrouter_reasoning_details": reasoning_details
+            }
         if item["role"] == "assistant" and item.get("tool_calls"):
             calls = item["tool_calls"]
             if not isinstance(calls, list):
@@ -121,34 +143,14 @@ def clean_messages(raw: object) -> list[dict[str, Any]]:
                     if not isinstance(metadata_value, dict):
                         raise AgentError("Invalid provider metadata")
                     metadata = cast(dict[str, Any], metadata_value)
-                    allowed_metadata = {
-                        "gemini_thought_signature",
-                        "openrouter_reasoning_details",
-                    }
-                    if set(metadata) - allowed_metadata:
+                    if set(metadata) != {"gemini_thought_signature"}:
                         raise AgentError("Invalid provider metadata")
-                    safe_metadata: dict[str, Any] = {}
-                    if "gemini_thought_signature" in metadata:
-                        signature = metadata.get("gemini_thought_signature")
-                        if not isinstance(signature, str) or len(signature) > 131_072:
-                            raise AgentError("Invalid provider metadata")
-                        safe_metadata["gemini_thought_signature"] = signature
-                    if "openrouter_reasoning_details" in metadata:
-                        reasoning_details = metadata.get("openrouter_reasoning_details")
-                        if (
-                            not isinstance(reasoning_details, list)
-                            or any(not isinstance(detail, dict) for detail in reasoning_details)
-                        ):
-                            raise AgentError("Invalid provider metadata")
-                        try:
-                            encoded_details = json.dumps(reasoning_details, ensure_ascii=False).encode("utf-8")
-                        except (TypeError, ValueError):
-                            raise AgentError("Invalid provider metadata") from None
-                        if len(encoded_details) > 131_072:
-                            raise AgentError("Invalid provider metadata")
-                        safe_metadata["openrouter_reasoning_details"] = reasoning_details
-                    if safe_metadata:
-                        entry["provider_metadata"] = safe_metadata
+                    signature = metadata.get("gemini_thought_signature")
+                    if not isinstance(signature, str) or len(signature) > 131_072:
+                        raise AgentError("Invalid provider metadata")
+                    entry["provider_metadata"] = {
+                        "gemini_thought_signature": signature
+                    }
                 if "id" in call:
                     if not isinstance(call["id"], str) or not 1 <= len(call["id"]) <= 128:
                         raise AgentError("Invalid tool call ID")
