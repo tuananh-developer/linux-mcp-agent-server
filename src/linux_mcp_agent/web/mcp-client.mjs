@@ -4,9 +4,10 @@ export class McpError extends Error {
 }
 
 export class McpClient {
-  constructor(endpoint, onActivity = () => {}) {
+  constructor(endpoint, onActivity = () => {}, tokenProvider = null) {
     this.endpoint = endpoint;
     this.onActivity = onActivity;
+    this.tokenProvider = tokenProvider;
     this.session = null;
     this.version = null;
     this.token = '';
@@ -55,6 +56,11 @@ export class McpClient {
     if (!notification) payload.id = id;
     if (params !== undefined) payload.params = params;
     try {
+      if (this.tokenProvider) {
+        const freshToken = await this.tokenProvider();
+        if (!freshToken) throw new McpError('Phiên Keycloak đã hết hạn. Hãy đăng nhập lại.', 401);
+        this.token = freshToken;
+      }
       const response = await fetch(this.endpoint, {
         method: 'POST', headers: this.headers(), body: JSON.stringify(payload),
         signal: AbortSignal.timeout(15000), cache: 'no-store', redirect: 'error',
