@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a first-install Keycloak realm without committing generated secrets."""
+"""Render private Keycloak bootstrap files without committing generated secrets."""
 
 from __future__ import annotations
 
@@ -19,19 +19,54 @@ def required_env(name: str) -> str:
     return value
 
 
+def write_private_json(destination: Path, value: Any) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", dir=destination.parent
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary_name, 0o600)
+        os.replace(temporary_name, destination)
+        os.chmod(destination, 0o600)
+    finally:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--template", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--user-output", type=Path, required=True)
+    parser.add_argument("--credential-output", type=Path, required=True)
     args = parser.parse_args()
 
     mcp_domain = required_env("MCP_DOMAIN")
     auth_domain = required_env("AUTH_DOMAIN")
     resource_secret = required_env("RESOURCE_SERVER_SECRET")
     agent_secret = required_env("AGENT_CLIENT_SECRET")
+    username = required_env("INITIAL_ADMIN_USERNAME")
+    password = required_env("INITIAL_ADMIN_PASSWORD")
+    email = os.environ.get("INITIAL_ADMIN_EMAIL", "").strip()
+
     for value in (mcp_domain, auth_domain):
-        if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", value) or value.startswith(".") or value.endswith("."):
+        if (
+            not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", value)
+            or value.startswith(".")
+            or value.endswith(".")
+        ):
             raise SystemExit("MCP_DOMAIN and AUTH_DOMAIN must be valid DNS hostnames.")
+    if not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", username):
+        raise SystemExit("INITIAL_ADMIN_USERNAME must be 3-64 letters, digits, dots, underscores or hyphens.")
+    if len(password) < 12:
+        raise SystemExit("INITIAL_ADMIN_PASSWORD must contain at least 12 characters.")
 
     realm: dict[str, Any] = json.loads(args.template.read_text(encoding="utf-8"))
     replacements = {
@@ -56,24 +91,20 @@ def main() -> int:
     realm = walk(realm)
     if "CHANGE_ME_" in json.dumps(realm):
         raise SystemExit("The rendered realm still contains an unreplaced secret placeholder.")
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(
-        prefix=f".{args.output.name}.", dir=args.output.parent
+
+    user: dict[str, Any] = {"username": username, "enabled": True}
+    if email:
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            raise SystemExit("INITIAL_ADMIN_EMAIL must be a valid email address.")
+        user["email"] = email
+        user["emailVerified"] = True
+
+    write_private_json(args.output, realm)
+    write_private_json(args.user_output, user)
+    write_private_json(
+        args.credential_output,
+        {"type": "password", "value": password, "temporary": False},
     )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(realm, stream, indent=2)
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary_name, 0o600)
-        os.replace(temporary_name, args.output)
-        os.chmod(args.output, 0o600)
-    finally:
-        try:
-            os.unlink(temporary_name)
-        except FileNotFoundError:
-            pass
     return 0
 
 
