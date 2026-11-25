@@ -145,6 +145,7 @@ class ProviderGateway:
         path = {
             "gemini": "/models",
             "openai": "/models",
+            "openrouter": "/models",
             "anthropic": "/models",
             "ollama": "/api/tags",
         }[provider]
