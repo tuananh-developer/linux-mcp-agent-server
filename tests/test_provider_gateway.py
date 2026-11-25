@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from email.message import Message
 from io import BytesIO
 from typing import Any
 from urllib.error import HTTPError
@@ -222,7 +223,7 @@ def test_http_400_includes_provider_reason_without_exposing_api_key(
             "https://openrouter.ai/api/v1/chat/completions",
             400,
             "Bad Request",
-            {},
+            Message(),
             BytesIO(b'{"error":{"message":"Invalid tool schema; secret-test-key"}}'),
         )
 
