@@ -1,8 +1,8 @@
 [Unit]
 Description=Linux MCP Agent Server (read-only observability)
 Documentation=https://github.com/tuananh-developer/linux-mcp-agent-server
-Wants=network-online.target
-After=network-online.target systemd-journald.service
+Wants=network-online.target docker.service
+After=network-online.target systemd-journald.service docker.service
 
 [Service]
 Type=simple

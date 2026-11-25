@@ -1,5 +1,18 @@
 # Ubuntu 24.04 LTS deployment
 
+## Recommended automated installation
+
+For a fresh Ubuntu 24.04 host, use the project installer instead of following the manual steps below:
+
+```bash
+git clone https://github.com/tuananh-developer/linux-mcp-agent-server.git
+cd linux-mcp-agent-server
+sudo bash scripts/install.sh
+```
+
+The installer sets up Docker Compose infrastructure, Keycloak, the first dashboard user, the encrypted provider vault, the native MCP systemd service and Caddy HTTPS. It supports amd64 and arm64. See [the installation runbook](13_installation.md) for LAN DNS/CA trust, upgrade, recovery and uninstall.
+
+
 ## Host prerequisites
 
 - Ubuntu 24.04 LTS x86_64, systemd and journald.

@@ -1,5 +1,8 @@
 # systemd deployment
 
+> **Fresh installation:** On Ubuntu 24.04, prefer the automated installer: clone the repository and run `sudo bash scripts/install.sh`. It creates the service user, protected environment, vault key, systemd unit, Keycloak realm and reverse proxy. See [the installation runbook](../../docs/13_installation.md). The manual procedure below is retained for existing or operator-managed deployments.
+
+
 The MCP process is native on the Ubuntu host, runs as `linux-mcp-agent`, and binds only to `127.0.0.1:3002`. The unit deliberately grants no root privileges. It joins `systemd-journal` only because the journal reader needs to read the configured unit aliases; this group grants broader journal visibility and is a documented residual risk.
 
 ## Install
