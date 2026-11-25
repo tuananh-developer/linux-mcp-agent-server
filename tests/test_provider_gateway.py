@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 import httpx2
 import pytest
 
-from linux_mcp_agent.agent import AgentError
+from linux_mcp_agent.agent import AgentError, clean_messages
 from linux_mcp_agent.config import Settings
 from linux_mcp_agent.provider_gateway import ProviderGateway, ProviderSettings
 from linux_mcp_agent.server import build_asgi_app
@@ -233,6 +233,62 @@ def test_http_400_includes_provider_reason_without_exposing_api_key(
     assert "secret-test-key" not in str(exc_info.value)
     assert "[đã ẩn]" in str(exc_info.value)
 
+
+@pytest.mark.asyncio
+async def test_openrouter_preserves_reasoning_details_across_tool_round_trip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = ProviderGateway(ProviderSettings.from_payload({
+        "provider": "openrouter",
+        "model": "openrouter/free",
+        "api_key": "dummy-openrouter-key",
+    }))
+    reasoning_details = [{
+        "type": "reasoning.text",
+        "text": "opaque reasoning payload",
+        "signature": "opaque-signature",
+    }]
+    responses = [
+        {
+            "choices": [{"message": {
+                "role": "assistant",
+                "content": "",
+                "reasoning_details": reasoning_details,
+                "tool_calls": [{"id": "call_cpu", "function": {
+                    "name": "get_system_metrics", "arguments": "{}",
+                }}],
+            }}],
+        },
+        {
+            "choices": [{"message": {
+                "role": "assistant",
+                "content": "CPU usage is 12%.",
+            }}],
+        },
+    ]
+    captured: list[dict[str, Any]] = []
+
+    def fake_request(_method: str, _path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        assert payload is not None
+        captured.append(payload)
+        return responses.pop(0)
+
+    monkeypatch.setattr(gateway, "_request", fake_request)
+    first = await gateway.chat([{"role": "user", "content": "Check CPU"}], [])
+    next_messages = clean_messages([
+        {"role": "user", "content": "Check CPU"},
+        first["message"],
+        {
+            "role": "tool",
+            "tool_name": "get_system_metrics",
+            "tool_call_id": first["message"]["tool_calls"][0]["id"],
+            "content": '{"cpuUsagePercent":12}',
+        },
+    ])
+    second = await gateway.chat(next_messages, [])
+    assert second["message"]["content"] == "CPU usage is 12%."
+    replayed_assistant = captured[1]["messages"][1]
+    assert replayed_assistant["reasoning_details"] == reasoning_details
 
 @pytest.mark.asyncio
 async def test_gemini_chat_maps_function_call_and_history(monkeypatch: pytest.MonkeyPatch) -> None:
