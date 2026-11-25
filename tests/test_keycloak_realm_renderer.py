@@ -70,6 +70,7 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
     browser = clients["linux-observatory-browser"]
     assert browser["redirectUris"] == ["https://observatory.example.test/*"]
     assert browser["webOrigins"] == ["https://observatory.example.test"]
+    assert {"basic", "mcp.read"} <= set(browser["defaultClientScopes"])
 
 
 def test_renderer_rejects_invalid_hostname(tmp_path: Path) -> None:
