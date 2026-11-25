@@ -67,7 +67,7 @@ export class McpClient {
       });
       if (!response.ok) {
         const messages = {
-          401: 'Cần Bearer token Keycloak còn hiệu lực để kết nối.',
+          401: 'Phiên đăng nhập Keycloak chưa có hoặc đã hết hạn. Hãy đăng nhập lại bằng Keycloak.',
           403: 'Truy cập bị từ chối. Kiểm tra scope mcp.read và cấu hình Origin.',
           404: 'Endpoint MCP không tồn tại hoặc phiên đã hết hạn. Hãy kết nối lại.',
           421: 'Host không được phép. Kiểm tra MCP_ALLOWED_HOSTS.',
