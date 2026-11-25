@@ -47,6 +47,9 @@ async def agent_script(_: Request) -> FileResponse:
 async def agent_transport(_: Request) -> FileResponse:
     return FileResponse(_WEB / "agent-client.mjs", media_type="text/javascript", headers=_HEADERS)
 
+async def markdown_script(_: Request) -> FileResponse:
+    return FileResponse(_WEB / "markdown.mjs", media_type="text/javascript", headers=_HEADERS)
+
 def dashboard_routes() -> list[Route]:
     return [
         Route("/", dashboard_page, methods=["GET"]),
@@ -56,6 +59,7 @@ def dashboard_routes() -> list[Route]:
         Route("/dashboard/assets/overview.css", overview_styles, methods=["GET"]),
         Route("/dashboard/assets/agent-ui.js", agent_script, methods=["GET"]),
         Route("/dashboard/assets/agent-client.mjs", agent_transport, methods=["GET"]),
+        Route("/dashboard/assets/markdown.mjs", markdown_script, methods=["GET"]),
         Route("/dashboard/assets/app.js", dashboard_script, methods=["GET"]),
         Route("/dashboard/assets/app.css", dashboard_styles, methods=["GET"]),
         Route("/dashboard/assets/mcp-client.mjs", dashboard_transport, methods=["GET"]),
