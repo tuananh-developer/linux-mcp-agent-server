@@ -14,7 +14,6 @@ REALM_RENDERED="/run/linux-mcp-agent-realm.json"
 USER_RENDERED="/run/linux-mcp-agent-user.json"
 PASSWORD_RENDERED="/run/linux-mcp-agent-password.json"
 MARKER="$CONFIG_DIR/install.conf"
-PROGRESS="$CONFIG_DIR/install-progress.conf"
 RESUME=false
 MCP_DOMAIN="mcp.home.arpa"
 AUTH_DOMAIN="auth.home.arpa"
@@ -44,9 +43,10 @@ ROOT="$(pwd -P)"
 
 if (( $# > 1 )); then die "Usage: sudo bash scripts/install.sh [--resume]"; fi
 if (( $# == 1 )); then
-  if [[ "$1" == "--resume" ]]; then RESUME=true
-  elif [[ "$1" == "--help" || "$1" == "-h" ]]; then
-    cat <<'HELP'
+  case "$1" in
+    --resume) RESUME=true ;;
+    --help|-h)
+      cat <<'HELP'
 Linux Observatory one-command installer
 
 Usage:
@@ -60,11 +60,10 @@ Use scripts/upgrade.sh for updates and scripts/uninstall.sh for removal.
 If an installation stops part-way through, rerun with --resume. Existing secrets
 and data will be reused; do not delete the installation directories by hand.
 HELP
-    exit 0
-  fi
-  else
-    die "Unknown option: $1. Use --help."
-  fi
+      exit 0
+      ;;
+    *) die "Unknown option: $1. Use --help." ;;
+  esac
 fi
 
 if [[ "$RESUME" == "true" ]]; then
@@ -340,7 +339,7 @@ if [[ -z "$USER_ID" ]]; then
   USER_ID="$("$KCADM" get users -r linux-agent -q "username=$INSTALL_FIRST_USER" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
 fi
 [[ -n "$USER_ID" ]] || { echo "Initial Keycloak user was not created." >&2; exit 1; }
-"$KCADM" update "users/$USER_ID/reset-password" -r linux-agent -f /tmp/linux-agent-password.json
+"$KCADM" update "users/$USER_ID/reset-password" -r linux-agent -f /tmp/linux-agent-password.json -n
 echo "Initial dashboard account is ready."
 IN_CONTAINER
 rm -f "$REALM_RENDERED" "$USER_RENDERED" "$PASSWORD_RENDERED"
@@ -400,7 +399,6 @@ awk '
 install -o root -g root -m 0644 "$HOSTS_TEMP" /etc/hosts
 rm -f "$HOSTS_TEMP"
 
-rm -f "$PROGRESS"
 cat > "$MARKER" <<EOF
 INSTALL_DIR=$INSTALL_DIR
 MCP_DOMAIN=$MCP_DOMAIN
