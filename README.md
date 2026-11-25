@@ -23,11 +23,11 @@ The server exposes:
 | Resource | `linux://system/summary` | High-level JSON system and network summary |
 | Prompt | `health_check` | Safe, read-only health-check instructions |
 
-The AI assistant is optional and supports user-selected Gemini, OpenAI, OpenRouter, Anthropic, or local Ollama models. Hosted provider API keys can be saved per Keycloak subject in a server-side AES-256-GCM encrypted credential vault; the master key is delivered separately through systemd credentials. Ollama does not require an API key. The dashboard itself does not require an LLM, database, or provider API key. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
+The AI assistant is optional and supports user-selected Gemini, OpenAI, OpenRouter, Anthropic, or local Ollama models. Hosted provider API keys can be saved per Keycloak subject in a server-side AES-256-GCM encrypted credential vault. Production systemd installs deliver the master key through systemd credentials; demo mode keeps a per-installation key in the signed-in user's private config directory. Ollama does not require an API key. The dashboard itself does not require an LLM, database, or provider API key. No arbitrary shell, destructive system operation, process command line or environment values are exposed.
 
 ## Architecture
 
-- Python MCP service runs natively on the Linux host under systemd and binds to `127.0.0.1:3002`.
+- Python MCP service runs natively on the Linux host and binds to `127.0.0.1:3002`. Production installs can manage it with systemd; the demo launcher can run it as the signed-in user without installing a system service.
 - Caddy 2.11.7 terminates TLS and exposes the read-only dashboard, assistant, MCP endpoint, health check, and required protected-resource metadata route to the LAN.
 - Keycloak 26.8.1 issues OAuth access tokens; the MCP service validates them using RFC 7662 introspection and exact issuer/resource/audience/scope checks.
 - PostgreSQL 18.6 stores Keycloak data only. It is not an application database.
@@ -102,6 +102,14 @@ To start the local Keycloak/PostgreSQL/Caddy stack and ensure the MCP service is
 ```bash
 bash scripts/start-demo.sh
 ```
+
+After pulling updated code, restart the demo-managed server with one command:
+
+```bash
+bash scripts/restart-demo.sh
+```
+
+The restart helper stops only a process launched from this repository and then starts the server again. It also delegates to the systemd service when that production unit is installed. The API-key vault is initialized automatically; users save or remove hosted provider credentials from the dashboard without running vault-management commands.
 
 In a second terminal, run the real Keycloak-authenticated MCP acceptance client:
 
