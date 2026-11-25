@@ -46,6 +46,11 @@ fi
 rm -f /etc/systemd/system/linux-mcp-agent.service
 systemctl daemon-reload
 rm -rf "$INSTALL_DIR"
+# Keep generated secrets and persistent data, but remove the installation marker
+# so scripts/install.sh --resume can reconstruct the application later.
+if [[ "$PURGE" != "true" ]]; then
+  rm -f "$CONFIG_DIR/install.conf"
+fi
 
 HOSTS_TEMP="$(mktemp)"
 awk '
