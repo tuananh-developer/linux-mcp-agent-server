@@ -129,7 +129,7 @@ def test_openrouter_uses_openai_compatible_endpoint_and_headers() -> None:
     })
     gateway = ProviderGateway(settings)
     assert gateway.base_url == "https://openrouter.ai/api/v1"
-    headers = gateway._headers()
+    headers = gateway._headers()  # pyright: ignore[reportPrivateUsage]
     assert headers["Authorization"] == "Bearer openrouter-test-key"
     assert headers["HTTP-Referer"] == "https://mcp.home.arpa"
     assert headers["X-Title"] == "Linux Observatory"
