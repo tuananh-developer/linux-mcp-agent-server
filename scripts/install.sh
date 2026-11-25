@@ -14,13 +14,23 @@ REALM_RENDERED="/run/linux-mcp-agent-realm.json"
 USER_RENDERED="/run/linux-mcp-agent-user.json"
 PASSWORD_RENDERED="/run/linux-mcp-agent-password.json"
 MARKER="$CONFIG_DIR/install.conf"
+PROGRESS="$CONFIG_DIR/install-progress.conf"
+RESUME=false
 MCP_DOMAIN="mcp.home.arpa"
 AUTH_DOMAIN="auth.home.arpa"
 
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARNING: %s\033[0m\n' "$*" >&2; }
 die() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
-trap 'rm -f "$REALM_RENDERED" "$USER_RENDERED" "$PASSWORD_RENDERED"' EXIT
+cleanup() {
+  rm -f "$REALM_RENDERED" "$USER_RENDERED" "$PASSWORD_RENDERED"
+  if [[ -n "${KEYCLOAK_ID:-}" ]]; then
+    docker exec --user 0 "$KEYCLOAK_ID" rm -f \
+      /tmp/linux-agent-realm.json /tmp/linux-agent-user.json /tmp/linux-agent-password.json \
+      >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 
 if [[ "$EUID" -ne 0 ]]; then
   command -v sudo >/dev/null 2>&1 || die "Run this installer as root or install sudo first."
@@ -32,8 +42,10 @@ ROOT="$(pwd -P)"
 [[ -f "$ROOT/pyproject.toml" && -f "$ROOT/deploy/compose/compose.yaml" && -f "$ROOT/scripts/install.sh" ]] ||
   die "Run this script from the root of a clone of linux-mcp-agent-server."
 
-if (( $# > 0 )); then
-  if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+if (( $# > 1 )); then die "Usage: sudo bash scripts/install.sh [--resume]"; fi
+if (( $# == 1 )); then
+  if [[ "$1" == "--resume" ]]; then RESUME=true
+  elif [[ "$1" == "--help" || "$1" == "-h" ]]; then
     cat <<'HELP'
 Linux Observatory one-command installer
 
@@ -45,16 +57,37 @@ Supported target: Ubuntu 24.04 LTS (amd64 or arm64).
 Creates Docker infrastructure, Keycloak realm and first login, encrypted
 provider vault, and a native systemd MCP service. Existing data is not replaced.
 Use scripts/upgrade.sh for updates and scripts/uninstall.sh for removal.
+If an installation stops part-way through, rerun with --resume. Existing secrets
+and data will be reused; do not delete the installation directories by hand.
 HELP
     exit 0
   fi
-  die "Unknown option: $1. Use --help."
+  else
+    die "Unknown option: $1. Use --help."
+  fi
 fi
 
-[[ ! -f "$MARKER" ]] || die "Already installed. Use: sudo bash scripts/upgrade.sh"
-[[ ! -e "$INSTALL_DIR" ]] || die "$INSTALL_DIR exists but is not marked as this install; inspect it before continuing."
-[[ ! -e "$CONFIG_DIR/server.env" && ! -e "$CONFIG_DIR/compose.env" ]] ||
-  die "$CONFIG_DIR already contains configuration. Refusing to overwrite existing settings or secrets."
+if [[ "$RESUME" == "true" ]]; then
+  [[ ! -f "$MARKER" ]] || die "Installation is already complete. Use scripts/upgrade.sh instead."
+  [[ -d "$INSTALL_DIR" && -f "$COMPOSE_ENV" && -f "$SERVER_ENV" && -f "$CONFIG_DIR/agent-client.env" ]] ||
+    die "No resumable installation state was found. Do not remove partial data manually; inspect $CONFIG_DIR first."
+  # These files are created by this installer and protected by root-only permissions.
+  source "$COMPOSE_ENV"
+  source "$SERVER_ENV"
+  source "$CONFIG_DIR/agent-client.env"
+  MCP_DOMAIN="${MCP_DOMAIN:?Missing MCP_DOMAIN in compose config}"
+  AUTH_DOMAIN="${AUTH_DOMAIN:?Missing AUTH_DOMAIN in compose config}"
+  RESOURCE_SERVER_SECRET="${MCP_INTROSPECTION_CLIENT_SECRET:?Missing introspection secret}"
+  AGENT_CLIENT_SECRET="${MCP_AGENT_CLIENT_SECRET:?Missing agent client secret}"
+  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?Missing database secret}"
+  KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?Missing Keycloak admin secret}"
+  log "Resuming the existing installation without replacing secrets or data"
+else
+  [[ ! -f "$MARKER" ]] || die "Already installed. Use: sudo bash scripts/upgrade.sh"
+  [[ ! -e "$INSTALL_DIR" ]] || die "$INSTALL_DIR exists but is not marked as this install; inspect it or use --resume."
+  [[ ! -e "$CONFIG_DIR/server.env" && ! -e "$CONFIG_DIR/compose.env" ]] ||
+    die "$CONFIG_DIR already contains configuration. Refusing to overwrite existing settings or secrets."
+fi
 
 [[ -r /etc/os-release ]] || die "Cannot identify Linux distribution."
 # shellcheck disable=SC1091
@@ -66,8 +99,10 @@ ARCH="$(dpkg --print-architecture)"
   die "Unsupported architecture: $ARCH (supported: amd64, arm64)."
 [[ -t 0 ]] || die "Run in an interactive terminal to set the first dashboard user's password."
 
-log "Using the project's standard hostnames"
-printf 'Dashboard: https://%s\nAuthentication: https://%s\n' "$MCP_DOMAIN" "$AUTH_DOMAIN"
+if [[ "$RESUME" == "false" ]]; then
+  log "Using the project's standard hostnames"
+  printf 'Dashboard: https://%s\nAuthentication: https://%s\n' "$MCP_DOMAIN" "$AUTH_DOMAIN"
+fi
 
 LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')"
 if [[ -z "$LAN_IP" ]]; then LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; fi
@@ -166,16 +201,17 @@ rsync -a \
   "$ROOT/" "$INSTALL_DIR/"
 chown -R root:root "$INSTALL_DIR"
 
-log "Generating installation secrets"
-POSTGRES_PASSWORD="$(openssl rand -hex 32)"
-KEYCLOAK_ADMIN_PASSWORD="$(openssl rand -hex 32)"
-RESOURCE_SERVER_SECRET="$(openssl rand -hex 32)"
-AGENT_CLIENT_SECRET="$(openssl rand -hex 32)"
-MCP_RESOURCE_URI="https://$MCP_DOMAIN/mcp"
-KEYCLOAK_ISSUER_URL="https://$AUTH_DOMAIN/realms/linux-agent"
+if [[ "$RESUME" == "false" ]]; then
+  log "Generating installation secrets"
+  POSTGRES_PASSWORD="$(openssl rand -hex 32)"
+  KEYCLOAK_ADMIN_PASSWORD="$(openssl rand -hex 32)"
+  RESOURCE_SERVER_SECRET="$(openssl rand -hex 32)"
+  AGENT_CLIENT_SECRET="$(openssl rand -hex 32)"
+  MCP_RESOURCE_URI="https://$MCP_DOMAIN/mcp"
+  KEYCLOAK_ISSUER_URL="https://$AUTH_DOMAIN/realms/linux-agent"
 
-umask 077
-cat > "$COMPOSE_ENV" <<EOF
+  umask 077
+  cat > "$COMPOSE_ENV" <<EOF
 MCP_DOMAIN=$MCP_DOMAIN
 AUTH_DOMAIN=$AUTH_DOMAIN
 POSTGRES_DB=keycloak
@@ -184,10 +220,10 @@ POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KEYCLOAK_ADMIN_PASSWORD
 EOF
-chown root:root "$COMPOSE_ENV"
-chmod 0600 "$COMPOSE_ENV"
+  chown root:root "$COMPOSE_ENV"
+  chmod 0600 "$COMPOSE_ENV"
 
-cat > "$SERVER_ENV" <<EOF
+  cat > "$SERVER_ENV" <<EOF
 APP_ENV=production
 AUTH_MODE=keycloak
 MCP_HOST=127.0.0.1
@@ -224,18 +260,22 @@ OPENAI_API_KEY=
 OPENAI_MODEL=gpt-6-luna
 OPENAI_MAX_OUTPUT_TOKENS=1024
 EOF
-chown root:"$SERVICE_USER" "$SERVER_ENV"
-chmod 0640 "$SERVER_ENV"
+  chown root:"$SERVICE_USER" "$SERVER_ENV"
+  chmod 0640 "$SERVER_ENV"
 
-cat > "$CONFIG_DIR/agent-client.env" <<EOF
+  cat > "$CONFIG_DIR/agent-client.env" <<EOF
 MCP_AGENT_CLIENT_ID=linux-mcp-agent-client
 MCP_AGENT_CLIENT_SECRET=$AGENT_CLIENT_SECRET
 MCP_AGENT_RESOURCE_URI=$MCP_RESOURCE_URI
 EOF
-chown root:root "$CONFIG_DIR/agent-client.env"
-chmod 0600 "$CONFIG_DIR/agent-client.env"
-install -o root -g "$SERVICE_USER" -m 0640 \
-  "$INSTALL_DIR/config/log-sources.example.json" "$CONFIG_DIR/log-sources.json"
+  chown root:root "$CONFIG_DIR/agent-client.env"
+  chmod 0600 "$CONFIG_DIR/agent-client.env"
+fi
+
+if [[ ! -f "$CONFIG_DIR/log-sources.json" ]]; then
+  install -o root -g "$SERVICE_USER" -m 0640 \
+    "$INSTALL_DIR/config/log-sources.example.json" "$CONFIG_DIR/log-sources.json"
+fi
 
 log "Installing Python $PYTHON_VERSION and project dependencies"
 export UV_PYTHON_INSTALL_DIR="$INSTALL_DIR/.uv-python"
@@ -252,6 +292,7 @@ docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" up -d postgres keycl
 KEYCLOAK_ID="$(docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" ps -q keycloak)"
 [[ -n "$KEYCLOAK_ID" ]] || die "Keycloak container was not created."
 printf 'Waiting for Keycloak health check'
+HEALTH=""
 for _ in $(seq 1 120); do
   HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$KEYCLOAK_ID" 2>/dev/null || true)"
   if [[ "$HEALTH" == "healthy" ]]; then printf ' ready\n'; break; fi
@@ -359,6 +400,7 @@ awk '
 install -o root -g root -m 0644 "$HOSTS_TEMP" /etc/hosts
 rm -f "$HOSTS_TEMP"
 
+rm -f "$PROGRESS"
 cat > "$MARKER" <<EOF
 INSTALL_DIR=$INSTALL_DIR
 MCP_DOMAIN=$MCP_DOMAIN
