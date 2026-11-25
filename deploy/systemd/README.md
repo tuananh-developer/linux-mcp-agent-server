@@ -12,6 +12,11 @@ The MCP process is native on the Ubuntu host, runs as `linux-mcp-agent`, and bin
 sudo useradd --system --home /var/lib/linux-mcp-agent --create-home --shell /usr/sbin/nologin linux-mcp-agent
 sudo usermod -aG systemd-journal linux-mcp-agent
 sudo install -d -o root -g linux-mcp-agent -m 0750 /etc/linux-mcp-agent
+sudo install -d -o root -g root -m 0700 /etc/linux-mcp-agent
+if ! sudo test -f /etc/linux-mcp-agent/provider-vault.key; then
+  sudo sh -c 'umask 077; python3 -c "import secrets,sys; sys.stdout.buffer.write(secrets.token_bytes(32))" > /etc/linux-mcp-agent/provider-vault.key'
+  sudo chmod 0600 /etc/linux-mcp-agent/provider-vault.key
+fi
 sudo install -o root -g linux-mcp-agent -m 0640 deploy/systemd/server.env.example /etc/linux-mcp-agent/server.env
 sudo install -o root -g linux-mcp-agent -m 0640 config/log-sources.example.json /etc/linux-mcp-agent/log-sources.json
 sudo install -o root -g root -m 0644 deploy/systemd/linux-mcp-agent.service /etc/systemd/system/
