@@ -167,6 +167,11 @@ class ProviderGateway:
                 model_id = raw_name.removeprefix("models/")
                 if provider != "gemini" or "generateContent" in entry.get("supportedGenerationMethods", []):
                     model_ids.append(model_id)
+        # OpenRouter's free router is a virtual model selector and may not
+        # appear in /models; it dynamically chooses a free model compatible
+        # with the request (including tool calling when tools are supplied).
+        if provider == "openrouter":
+            model_ids.append("openrouter/free")
         return model_ids[:200]
 
     async def test_connection(self) -> dict[str, Any]:
