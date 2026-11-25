@@ -39,6 +39,7 @@ const agentUI = mountAgent({
   tools: () => state.tools,
   connected: () => state.connected,
   toast,
+  getAccessToken,
 });
 
 function openConnection() {
