@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from io import BytesIO
 from typing import Any
+from urllib.error import HTTPError
 
 import httpx2
 import pytest
@@ -156,13 +158,27 @@ def test_openrouter_uses_openai_compatible_endpoint_and_headers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_openrouter_chat_normalizes_tool_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_openrouter_chat_sends_tools_with_compatible_provider_routing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     gateway = ProviderGateway(ProviderSettings.from_payload({
         "provider": "openrouter",
-        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "model": "openrouter/free",
         "api_key": "dummy-openrouter-key",
     }))
     captured: list[dict[str, Any]] = []
+    tool_defs = [{
+        "type": "function",
+        "function": {
+            "name": "get_system_metrics",
+            "description": "Read CPU and memory metrics",
+            "parameters": {
+                "type": "object",
+                "properties": {"include_details": {"type": "boolean"}},
+                "additionalProperties": False,
+            },
+        },
+    }]
 
     def fake_request(_method: str, _path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         assert payload is not None
@@ -179,12 +195,42 @@ async def test_openrouter_chat_normalizes_tool_calls(monkeypatch: pytest.MonkeyP
         }
 
     monkeypatch.setattr(gateway, "_request", fake_request)
-    result = await gateway.chat([{"role": "user", "content": "Check CPU"}], [])
+    result = await gateway.chat([{"role": "user", "content": "Check CPU"}], tool_defs)
     assert result["message"]["tool_calls"][0]["id"] == "call_cpu"
-    assert captured[0]["model"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
-    assert captured[0]["max_tokens"] == 1536
-    assert "max_completion_tokens" not in captured[0]
+    assert captured[0]["model"] == "openrouter/free"
+    assert captured[0]["max_completion_tokens"] == 1536
+    assert "max_tokens" not in captured[0]
+    assert captured[0]["provider"] == {"require_parameters": True}
+    assert captured[0]["tools"] == tool_defs
+    assert "parallel_tool_calls" not in captured[0]
+    assert "tool_choice" not in captured[0]
     assert result["usage"] == {"input_tokens": 12, "output_tokens": 3}
+
+
+def test_http_400_includes_provider_reason_without_exposing_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = ProviderSettings.from_payload({
+        "provider": "openrouter",
+        "model": "openrouter/free",
+        "api_key": "secret-test-key",
+    })
+    gateway = ProviderGateway(settings)
+
+    def reject_request(_request: Any, timeout: int) -> Any:
+        raise HTTPError(
+            "https://openrouter.ai/api/v1/chat/completions",
+            400,
+            "Bad Request",
+            {},
+            BytesIO(b'{"error":{"message":"Invalid tool schema; secret-test-key"}}'),
+        )
+
+    monkeypatch.setattr(gateway.opener, "open", reject_request)
+    with pytest.raises(AgentError, match="Invalid tool schema") as exc_info:
+        gateway._request("POST", "/chat/completions", {"model": "openrouter/free"})
+    assert "secret-test-key" not in str(exc_info.value)
+    assert "[đã ẩn]" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
