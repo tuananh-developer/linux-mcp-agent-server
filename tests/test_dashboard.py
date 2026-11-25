@@ -42,6 +42,8 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assert "Tổng quan hệ thống" in page.text
         assert 'id="cpu-value"' in page.text
         assert "Tự động cập nhật mỗi 5 giây" in page.text
+        assert 'id="login-keycloak"' in page.text
+        assert 'id="bearer-token"' not in page.text
         overview_script = await client.get("/dashboard/assets/overview.js")
         assert overview_script.status_code == 200
         assert "REFRESH_INTERVAL_MS=5000" in overview_script.text
@@ -49,6 +51,8 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assistant = await client.get("/assistant")
         assert assistant.status_code == 200
         assert 'id="chat-form"' in assistant.text
+        assert 'id="login-keycloak"' in assistant.text
+        assert 'id="bearer-token"' not in assistant.text
         for removed_screen in ("view-overview", "view-processes", "view-logs", "view-explorer"):
             assert f'id="{removed_screen}"' not in page.text
         assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
