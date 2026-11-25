@@ -399,7 +399,7 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
             async with provider_limit:
                 result = await gateway.chat(messages, tools)
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
-        except AgentError as exc:
+        except (AgentError, CredentialVaultError) as exc:
             status_code = 413 if str(exc).startswith("Request vượt quá") else 400
             return JSONResponse({"error": str(exc)}, status_code=status_code)
 
