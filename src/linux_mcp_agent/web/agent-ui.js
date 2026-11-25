@@ -1,4 +1,5 @@
 import { AgentRunner } from './agent-client.mjs';
+import { parseMarkdown } from './markdown.mjs';
 
 const PROVIDER_DEFAULTS = {
   gemini: 'gemini-3.8-flash',
@@ -48,6 +49,51 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     if (follow || nearBottom) transcript.scrollTop = transcript.scrollHeight;
   }
 
+  function appendMarkdownNode(parent, item) {
+    if (item.type === 'text') {
+      parent.append(document.createTextNode(item.value));
+      return;
+    }
+
+    const allowedTags = new Set([
+      'a', 'blockquote', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'hr', 'li', 'ol', 'p', 'pre', 's', 'strong', 'table', 'tbody', 'td', 'th',
+      'thead', 'tr', 'ul',
+    ]);
+    if (!allowedTags.has(item.tag)) {
+      parent.append(document.createTextNode(item.children.map(child => child.value ?? '').join('')));
+      return;
+    }
+
+    const child = document.createElement(item.tag);
+    for (const [name, value] of Object.entries(item.attributes ?? {})) {
+      if (name === 'className' && typeof value === 'string') {
+        child.className = value;
+      } else if (name === 'data-align' && ['left', 'center', 'right'].includes(value)) {
+        child.setAttribute(name, value);
+      } else if (name === 'href' && item.tag === 'a' && typeof value === 'string') {
+        try {
+          const url = new URL(value);
+          if (url.protocol === 'http:' || url.protocol === 'https:') {
+            child.href = url.href;
+            child.target = '_blank';
+            child.rel = 'noopener noreferrer';
+          }
+        } catch {
+          // Invalid links remain ordinary, non-clickable text.
+        }
+      }
+    }
+    for (const nested of item.children ?? []) appendMarkdownNode(child, nested);
+    parent.append(child);
+  }
+
+  function appendMarkdown(parent, source) {
+    const fragment = document.createDocumentFragment();
+    for (const item of parseMarkdown(source)) appendMarkdownNode(fragment, item);
+    parent.append(fragment);
+  }
+
   function message(role, text) {
     const labels = { user: 'Bạn', assistant: 'Trợ lý Linux', error: 'Thông báo' };
     const node = document.createElement('article');
@@ -55,7 +101,12 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     const label = document.createElement('strong');
     label.textContent = labels[role];
     const content = document.createElement('div');
-    content.textContent = text;
+    if (role === 'assistant') {
+      content.className = 'chat-markdown';
+      appendMarkdown(content, text);
+    } else {
+      content.textContent = text;
+    }
     node.append(label, content);
     appendToTranscript(node, role === 'user');
   }
