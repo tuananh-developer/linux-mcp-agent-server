@@ -235,7 +235,7 @@ def test_http_400_includes_provider_reason_without_exposing_api_key(
 
 
 @pytest.mark.asyncio
-async def test_openrouter_preserves_reasoning_details_across_tool_round_trip(
+async def test_openrouter_preserves_reasoning_details_across_tool_and_user_turns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gateway = ProviderGateway(ProviderSettings.from_payload({
@@ -243,17 +243,22 @@ async def test_openrouter_preserves_reasoning_details_across_tool_round_trip(
         "model": "openrouter/free",
         "api_key": "dummy-openrouter-key",
     }))
-    reasoning_details = [{
+    tool_round_details = [{
         "type": "reasoning.text",
-        "text": "opaque reasoning payload",
-        "signature": "opaque-signature",
+        "text": "opaque tool-round reasoning",
+        "signature": "opaque-tool-signature",
+    }]
+    final_turn_details = [{
+        "type": "reasoning.text",
+        "text": "opaque final-turn reasoning",
+        "signature": "opaque-final-signature",
     }]
     responses = [
         {
             "choices": [{"message": {
                 "role": "assistant",
                 "content": "",
-                "reasoning_details": reasoning_details,
+                "reasoning_details": tool_round_details,
                 "tool_calls": [{"id": "call_cpu", "function": {
                     "name": "get_system_metrics", "arguments": "{}",
                 }}],
@@ -263,6 +268,13 @@ async def test_openrouter_preserves_reasoning_details_across_tool_round_trip(
             "choices": [{"message": {
                 "role": "assistant",
                 "content": "CPU usage is 12%.",
+                "reasoning_details": final_turn_details,
+            }}],
+        },
+        {
+            "choices": [{"message": {
+                "role": "assistant",
+                "content": "RAM is also within normal range.",
             }}],
         },
     ]
@@ -287,8 +299,19 @@ async def test_openrouter_preserves_reasoning_details_across_tool_round_trip(
     ])
     second = await gateway.chat(next_messages, [])
     assert second["message"]["content"] == "CPU usage is 12%."
-    replayed_assistant = captured[1]["messages"][1]
-    assert replayed_assistant["reasoning_details"] == reasoning_details
+    assert second["message"]["provider_metadata"]["openrouter_reasoning_details"] == final_turn_details
+
+    continued_messages = clean_messages([
+        *next_messages,
+        second["message"],
+        {"role": "user", "content": "How is RAM?"},
+    ])
+    third = await gateway.chat(continued_messages, [])
+    assert third["message"]["content"] == "RAM is also within normal range."
+    replayed_tool_assistant = captured[1]["messages"][2]
+    replayed_final_assistant = captured[2]["messages"][4]
+    assert replayed_tool_assistant["reasoning_details"] == tool_round_details
+    assert replayed_final_assistant["reasoning_details"] == final_turn_details
 
 @pytest.mark.asyncio
 async def test_gemini_chat_maps_function_call_and_history(monkeypatch: pytest.MonkeyPatch) -> None:
