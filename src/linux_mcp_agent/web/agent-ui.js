@@ -91,9 +91,9 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
       : 'API key mặc định chỉ được giữ trong bộ nhớ tab và gửi qua HTTPS tới gateway. Không lưu bền vững trên trình duyệt hoặc server. Chỉ gửi log khi bạn cấp quyền đọc log.';
   }
 
-  function restoreRememberedProviderConfig() {
+  function restoreRememberedProviderConfig(providerFilter = '') {
     const saved = readSavedProviderConfig();
-    if (!saved || saved.provider === 'ollama') return false;
+    if (!saved || saved.provider === 'ollama' || (providerFilter && saved.provider !== providerFilter)) return false;
     $('agent-provider').value = saved.provider;
     $('agent-model').value = saved.model;
     $('agent-api-key').value = saved.api_key;
@@ -425,7 +425,12 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     $('agent-ollama-url').value = 'http://127.0.0.1:11434';
     setProviderVisibility();
     populateModels([]);
-    updateProviderFeedback('Đã chọn ' + PROVIDER_LABELS[provider] + '. Nhập Model ID và API key để kiểm tra.');
+    if (!restoreRememberedProviderConfig(provider)) {
+      $('provider-memory').textContent = $('agent-remember-key').checked
+        ? 'Ghi nhớ sau khi xác thực'
+        : 'Không ghi nhớ key';
+      updateProviderFeedback('Đã chọn ' + PROVIDER_LABELS[provider] + '. Nhập Model ID và API key để kiểm tra.');
+    }
   });
   $('agent-model').addEventListener('input', () => {
     providerConfig = null;
