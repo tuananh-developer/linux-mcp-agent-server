@@ -3,12 +3,14 @@ import { AgentRunner } from './agent-client.mjs';
 const PROVIDER_DEFAULTS = {
   gemini: 'gemini-3.8-flash',
   openai: 'gpt-4.1-mini',
+  openrouter: 'nvidia/nemotron-3-ultra-550b-a55b:free',
   anthropic: 'claude-sonnet-4-6',
   ollama: 'qwen3:4b',
 };
 const PROVIDER_LABELS = {
   gemini: 'Google Gemini',
   openai: 'OpenAI',
+  openrouter: 'OpenRouter (free model)',
   anthropic: 'Anthropic Claude',
   ollama: 'Ollama',
 };
