@@ -228,7 +228,7 @@ def test_http_400_includes_provider_reason_without_exposing_api_key(
 
     monkeypatch.setattr(gateway.opener, "open", reject_request)
     with pytest.raises(AgentError, match="Invalid tool schema") as exc_info:
-        gateway._request("POST", "/chat/completions", {"model": "openrouter/free"})
+        gateway._request("POST", "/chat/completions", {"model": "openrouter/free"})  # pyright: ignore[reportPrivateUsage]
     assert "secret-test-key" not in str(exc_info.value)
     assert "[đã ẩn]" in str(exc_info.value)
 
