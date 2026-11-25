@@ -16,9 +16,10 @@ import stat
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -85,7 +86,7 @@ class CredentialVault:
 
     @staticmethod
     def _aad(subject: str, provider: str, model: str) -> bytes:
-        return f"linux-mcp-agent/provider-vault/v1/{subject}/{provider}/{model}".encode("utf-8")
+        return f"linux-mcp-agent/provider-vault/v1/{subject}/{provider}/{model}".encode()
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
@@ -161,10 +162,8 @@ class CredentialVault:
             if descriptor >= 0:
                 os.close(descriptor)
             if temporary_path is not None:
-                try:
+                with suppress(OSError):
                     os.unlink(temporary_path)
-                except OSError:
-                    pass
 
     def put(self, subject: str, provider: str, model: str, api_key: str) -> None:
         self._validate_identity(subject, provider)
