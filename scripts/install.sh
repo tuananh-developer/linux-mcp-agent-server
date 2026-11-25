@@ -82,16 +82,18 @@ if [[ "$RESUME" == "true" ]]; then
     KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?Missing Keycloak admin secret}"
     REUSE_EXISTING_SECRETS=true
     log "Resuming the existing installation without replacing secrets or data"
-  elif [[ -e "$COMPOSE_ENV" || -e "$SERVER_ENV" || -e "$CONFIG_DIR/agent-client.env" ]]; then
-    die "Partial secret files were found. Refusing to regenerate or overwrite them; inspect $CONFIG_DIR."
+  elif [[ -e "$COMPOSE_ENV" || -e "$SERVER_ENV" || -e "$CONFIG_DIR/agent-client.env" ||
+          -e "$CONFIG_DIR/provider-vault.key" || -e /var/lib/linux-mcp-agent/provider-credentials.json ]]; then
+    die "Partial or existing secret/vault data was found without the complete installer configuration. Refusing to regenerate secrets; inspect and back up the existing state."
   else
     log "Resuming before secrets were generated; continuing first-time setup"
   fi
 else
   [[ ! -f "$MARKER" ]] || die "Already installed. Use: sudo bash scripts/upgrade.sh"
   [[ ! -e "$INSTALL_DIR" ]] || die "$INSTALL_DIR exists but is not marked as this install; inspect it or use --resume."
-  [[ ! -e "$CONFIG_DIR/server.env" && ! -e "$CONFIG_DIR/compose.env" ]] ||
-    die "$CONFIG_DIR already contains configuration. Refusing to overwrite existing settings or secrets."
+  if [[ -d "$CONFIG_DIR" ]] && [[ -n "$(find "$CONFIG_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    die "$CONFIG_DIR already contains files. Use --resume only for a previous installer run; otherwise inspect and back up existing data."
+  fi
 fi
 
 [[ -r /etc/os-release ]] || die "Cannot identify Linux distribution."
@@ -207,7 +209,7 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0700 /var/lib/linux-mcp-agen
 install -d -o root -g root -m 0755 /var/cache/linux-mcp-agent/uv
 
 log "Copying application files"
-rsync -a \
+rsync -a --delete \
   --exclude='/.git/' --exclude='/.venv/' --exclude='/.uv-python/' \
   --exclude='/.pytest_cache/' --exclude='/.ruff_cache/' \
   --exclude='/.env' --exclude='/deploy/compose/.env' --exclude='__pycache__/' \
@@ -413,6 +415,19 @@ awk '
 install -o root -g root -m 0644 "$HOSTS_TEMP" /etc/hosts
 rm -f "$HOSTS_TEMP"
 
+log "Running final health checks"
+curl --silent --show-error --fail --max-time 5 \
+  --cacert "$CONFIG_DIR/caddy-root.crt" \
+  --resolve "$MCP_DOMAIN:443:127.0.0.1" \
+  "https://$MCP_DOMAIN/healthz" >/dev/null ||
+  die "HTTPS dashboard health check failed. Inspect Caddy logs and journalctl -u linux-mcp-agent."
+
+curl --silent --show-error --fail --max-time 5 \
+  --cacert "$CONFIG_DIR/caddy-root.crt" \
+  --resolve "$AUTH_DOMAIN:443:127.0.0.1" \
+  "https://$AUTH_DOMAIN/realms/linux-agent/.well-known/openid-configuration" >/dev/null ||
+  die "Keycloak OIDC HTTPS health check failed. Inspect Caddy and Keycloak logs."
+
 cat > "$MARKER" <<EOF
 INSTALL_DIR=$INSTALL_DIR
 MCP_DOMAIN=$MCP_DOMAIN
@@ -422,13 +437,6 @@ INSTALL_VERSION=1
 EOF
 chown root:root "$MARKER"
 chmod 0600 "$MARKER"
-
-log "Running final health checks"
-curl --silent --show-error --fail --max-time 5 \
-  --cacert "$CONFIG_DIR/caddy-root.crt" \
-  --resolve "$MCP_DOMAIN:443:127.0.0.1" \
-  "https://$MCP_DOMAIN/healthz" >/dev/null ||
-  die "HTTPS health check failed. Inspect Caddy logs and journalctl -u linux-mcp-agent."
 
 docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" ps
 systemctl --no-pager --full status linux-mcp-agent.service | sed -n '1,12p'
