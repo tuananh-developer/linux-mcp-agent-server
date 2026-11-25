@@ -61,6 +61,7 @@ export class McpClient {
         if (!freshToken) throw new McpError('Phiên Keycloak đã hết hạn. Hãy đăng nhập lại.', 401);
         this.token = freshToken;
       }
+      if (generation !== this.generation) throw new McpError('Kết nối đã thay đổi.');
       const response = await fetch(this.endpoint, {
         method: 'POST', headers: this.headers(), body: JSON.stringify(payload),
         signal: AbortSignal.timeout(15000), cache: 'no-store', redirect: 'error',
