@@ -12,7 +12,7 @@ _HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self'; style-src 'self'; "
-        "connect-src 'self'; img-src 'self' data:; font-src 'self'; "
+        "connect-src 'self' https://auth.home.arpa; img-src 'self' data:; font-src 'self'; "
         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
     ),
 }
@@ -38,6 +38,9 @@ async def dashboard_styles(_: Request) -> FileResponse:
 async def dashboard_transport(_: Request) -> FileResponse:
     return FileResponse(_WEB / "mcp-client.mjs", media_type="text/javascript", headers=_HEADERS)
 
+async def keycloak_auth_script(_: Request) -> FileResponse:
+    return FileResponse(_WEB / "keycloak-auth.mjs", media_type="text/javascript", headers=_HEADERS)
+
 async def agent_script(_: Request) -> FileResponse:
     return FileResponse(_WEB / "agent-ui.js", media_type="text/javascript", headers=_HEADERS)
 
@@ -56,4 +59,5 @@ def dashboard_routes() -> list[Route]:
         Route("/dashboard/assets/app.js", dashboard_script, methods=["GET"]),
         Route("/dashboard/assets/app.css", dashboard_styles, methods=["GET"]),
         Route("/dashboard/assets/mcp-client.mjs", dashboard_transport, methods=["GET"]),
+        Route("/dashboard/assets/keycloak-auth.mjs", keycloak_auth_script, methods=["GET"]),
     ]
