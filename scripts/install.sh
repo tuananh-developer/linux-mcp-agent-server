@@ -15,6 +15,7 @@ USER_RENDERED="/run/linux-mcp-agent-user.json"
 PASSWORD_RENDERED="/run/linux-mcp-agent-password.json"
 MARKER="$CONFIG_DIR/install.conf"
 RESUME=false
+REUSE_EXISTING_SECRETS=false
 MCP_DOMAIN="mcp.home.arpa"
 AUTH_DOMAIN="auth.home.arpa"
 
@@ -68,19 +69,24 @@ fi
 
 if [[ "$RESUME" == "true" ]]; then
   [[ ! -f "$MARKER" ]] || die "Installation is already complete. Use scripts/upgrade.sh instead."
-  [[ -d "$INSTALL_DIR" && -f "$COMPOSE_ENV" && -f "$SERVER_ENV" && -f "$CONFIG_DIR/agent-client.env" ]] ||
-    die "No resumable installation state was found. Do not remove partial data manually; inspect $CONFIG_DIR first."
-  # These files are created by this installer and protected by root-only permissions.
-  source "$COMPOSE_ENV"
-  source "$SERVER_ENV"
-  source "$CONFIG_DIR/agent-client.env"
-  MCP_DOMAIN="${MCP_DOMAIN:?Missing MCP_DOMAIN in compose config}"
-  AUTH_DOMAIN="${AUTH_DOMAIN:?Missing AUTH_DOMAIN in compose config}"
-  RESOURCE_SERVER_SECRET="${MCP_INTROSPECTION_CLIENT_SECRET:?Missing introspection secret}"
-  AGENT_CLIENT_SECRET="${MCP_AGENT_CLIENT_SECRET:?Missing agent client secret}"
-  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?Missing database secret}"
-  KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?Missing Keycloak admin secret}"
-  log "Resuming the existing installation without replacing secrets or data"
+  if [[ -f "$COMPOSE_ENV" && -f "$SERVER_ENV" && -f "$CONFIG_DIR/agent-client.env" ]]; then
+    # These files are created by this installer and protected by root-only permissions.
+    source "$COMPOSE_ENV"
+    source "$SERVER_ENV"
+    source "$CONFIG_DIR/agent-client.env"
+    MCP_DOMAIN="${MCP_DOMAIN:?Missing MCP_DOMAIN in compose config}"
+    AUTH_DOMAIN="${AUTH_DOMAIN:?Missing AUTH_DOMAIN in compose config}"
+    RESOURCE_SERVER_SECRET="${MCP_INTROSPECTION_CLIENT_SECRET:?Missing introspection secret}"
+    AGENT_CLIENT_SECRET="${MCP_AGENT_CLIENT_SECRET:?Missing agent client secret}"
+    POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?Missing database secret}"
+    KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?Missing Keycloak admin secret}"
+    REUSE_EXISTING_SECRETS=true
+    log "Resuming the existing installation without replacing secrets or data"
+  elif [[ -e "$COMPOSE_ENV" || -e "$SERVER_ENV" || -e "$CONFIG_DIR/agent-client.env" ]]; then
+    die "Partial secret files were found. Refusing to regenerate or overwrite them; inspect $CONFIG_DIR."
+  else
+    log "Resuming before secrets were generated; continuing first-time setup"
+  fi
 else
   [[ ! -f "$MARKER" ]] || die "Already installed. Use: sudo bash scripts/upgrade.sh"
   [[ ! -e "$INSTALL_DIR" ]] || die "$INSTALL_DIR exists but is not marked as this install; inspect it or use --resume."
@@ -98,7 +104,7 @@ ARCH="$(dpkg --print-architecture)"
   die "Unsupported architecture: $ARCH (supported: amd64, arm64)."
 [[ -t 0 ]] || die "Run in an interactive terminal to set the first dashboard user's password."
 
-if [[ "$RESUME" == "false" ]]; then
+if [[ "$REUSE_EXISTING_SECRETS" == "false" ]]; then
   log "Using the project's standard hostnames"
   printf 'Dashboard: https://%s\nAuthentication: https://%s\n' "$MCP_DOMAIN" "$AUTH_DOMAIN"
 fi
@@ -200,7 +206,7 @@ rsync -a \
   "$ROOT/" "$INSTALL_DIR/"
 chown -R root:root "$INSTALL_DIR"
 
-if [[ "$RESUME" == "false" ]]; then
+if [[ "$REUSE_EXISTING_SECRETS" == "false" ]]; then
   log "Generating installation secrets"
   POSTGRES_PASSWORD="$(openssl rand -hex 32)"
   KEYCLOAK_ADMIN_PASSWORD="$(openssl rand -hex 32)"
