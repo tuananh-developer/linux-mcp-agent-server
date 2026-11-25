@@ -23,7 +23,13 @@ if [[ -e "$KEY_FILE" ]]; then
     printf 'ERROR: %s must be a regular, non-symlink file.\n' "$KEY_FILE" >&2
     exit 1
   }
-  printf 'Provider vault key already exists; leaving it unchanged.\n'
+  [[ "$(stat -c '%s' "$KEY_FILE")" == "32" ]] || {
+    printf 'ERROR: existing provider vault key must contain exactly 32 bytes.\n' >&2
+    exit 1
+  }
+  chown root:root "$KEY_FILE"
+  chmod 0600 "$KEY_FILE"
+  printf 'Provider vault key already exists; leaving its contents unchanged.\n'
 else
   temporary_file="$(mktemp)"
   trap 'rm -f "$temporary_file"' EXIT
