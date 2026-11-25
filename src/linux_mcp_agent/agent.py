@@ -273,7 +273,9 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
             raise AgentError("Chưa có cấu hình nhà cung cấp AI.")
         provider = raw.get("provider")
         api_key = raw.get("api_key", "")
-        if provider == "ollama" or (isinstance(api_key, str) and api_key.strip()):
+        if provider == "ollama" or (api_key is not None and not isinstance(api_key, str)):
+            return ProviderSettings.from_payload(raw)
+        if isinstance(api_key, str) and api_key.strip():
             return ProviderSettings.from_payload(raw)
         if not isinstance(provider, str) or provider not in PROVIDERS:
             raise AgentError("Nhà cung cấp AI không được hỗ trợ.")
