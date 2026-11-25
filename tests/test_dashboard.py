@@ -56,10 +56,13 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         for removed_screen in ("view-overview", "view-processes", "view-logs", "view-explorer"):
             assert f'id="{removed_screen}"' not in page.text
         assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
-        for asset in ("overview.css", "overview.js", "app.css", "app.js", "mcp-client.mjs", "keycloak-auth.mjs", "agent-ui.js", "agent-client.mjs"):
+        for asset in ("overview.css", "overview.js", "app.css", "app.js", "mcp-client.mjs", "keycloak-auth.mjs", "agent-ui.js", "agent-client.mjs", "markdown.mjs"):
             result = await client.get(f"/dashboard/assets/{asset}")
             assert result.status_code == 200
             assert result.headers["x-content-type-options"] == "nosniff"
+            if asset == "markdown.mjs":
+                assert "export function parseMarkdown" in result.text
+                assert "text/javascript" in result.headers["content-type"]
         assert (await client.get("/dashboard/assets/../../config.py")).status_code == 404
         headers = {
             "Accept": "application/json, text/event-stream",
