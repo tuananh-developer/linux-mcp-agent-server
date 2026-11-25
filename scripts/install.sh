@@ -11,6 +11,8 @@ COMPOSE_ENV="$CONFIG_DIR/compose.env"
 SERVER_ENV="$CONFIG_DIR/server.env"
 REALM_TEMPLATE="$INSTALL_DIR/deploy/keycloak/realm-linux-agent.example.json"
 REALM_RENDERED="/run/linux-mcp-agent-realm.json"
+USER_RENDERED="/run/linux-mcp-agent-user.json"
+PASSWORD_RENDERED="/run/linux-mcp-agent-password.json"
 MARKER="$CONFIG_DIR/install.conf"
 MCP_DOMAIN="mcp.home.arpa"
 AUTH_DOMAIN="auth.home.arpa"
@@ -18,7 +20,7 @@ AUTH_DOMAIN="auth.home.arpa"
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mWARNING: %s\033[0m\n' "$*" >&2; }
 die() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
-trap 'rm -f "$REALM_RENDERED"' EXIT
+trap 'rm -f "$REALM_RENDERED" "$USER_RENDERED" "$PASSWORD_RENDERED"' EXIT
 
 if [[ "$EUID" -ne 0 ]]; then
   command -v sudo >/dev/null 2>&1 || die "Run this installer as root or install sudo first."
@@ -64,14 +66,8 @@ ARCH="$(dpkg --print-architecture)"
   die "Unsupported architecture: $ARCH (supported: amd64, arm64)."
 [[ -t 0 ]] || die "Run in an interactive terminal to set the first dashboard user's password."
 
-log "Initial configuration"
-read -r -p "Dashboard hostname [mcp.home.arpa]: " input
-[[ -n "$input" ]] && MCP_DOMAIN="$input"
-read -r -p "Authentication hostname [auth.home.arpa]: " input
-[[ -n "$input" ]] && AUTH_DOMAIN="$input"
-[[ "$MCP_DOMAIN" =~ ^[A-Za-z0-9.-]+$ && "$AUTH_DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] ||
-  die "Hostnames may contain only letters, digits, dots and hyphens."
-[[ "$MCP_DOMAIN" != "$AUTH_DOMAIN" ]] || die "Dashboard and authentication hostnames must differ."
+log "Using the project's standard hostnames"
+printf 'Dashboard: https://%s\nAuthentication: https://%s\n' "$MCP_DOMAIN" "$AUTH_DOMAIN"
 
 LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')"
 if [[ -z "$LAN_IP" ]]; then LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; fi
@@ -168,6 +164,7 @@ rsync -a \
   --exclude='/.pytest_cache/' --exclude='/.ruff_cache/' \
   --exclude='/.env' --exclude='/deploy/compose/.env' --exclude='__pycache__/' \
   "$ROOT/" "$INSTALL_DIR/"
+chown -R root:root "$INSTALL_DIR"
 
 log "Generating installation secrets"
 POSTGRES_PASSWORD="$(openssl rand -hex 32)"
@@ -271,16 +268,23 @@ done
 log "Creating Keycloak realm, clients and initial dashboard user"
 MCP_DOMAIN="$MCP_DOMAIN" AUTH_DOMAIN="$AUTH_DOMAIN" \
 RESOURCE_SERVER_SECRET="$RESOURCE_SERVER_SECRET" AGENT_CLIENT_SECRET="$AGENT_CLIENT_SECRET" \
+INITIAL_ADMIN_USERNAME="$FIRST_USER" INITIAL_ADMIN_PASSWORD="$FIRST_PASSWORD" \
+INITIAL_ADMIN_EMAIL="$FIRST_EMAIL" \
 python3 "$INSTALL_DIR/scripts/render-keycloak-realm.py" \
-  --template "$REALM_TEMPLATE" --output "$REALM_RENDERED"
+  --template "$REALM_TEMPLATE" --output "$REALM_RENDERED" \
+  --user-output "$USER_RENDERED" --credential-output "$PASSWORD_RENDERED"
 docker cp "$REALM_RENDERED" "$KEYCLOAK_ID:/tmp/linux-agent-realm.json"
+docker cp "$USER_RENDERED" "$KEYCLOAK_ID:/tmp/linux-agent-user.json"
+docker cp "$PASSWORD_RENDERED" "$KEYCLOAK_ID:/tmp/linux-agent-password.json"
+docker exec --user 0 "$KEYCLOAK_ID" chown 1000:0 \
+  /tmp/linux-agent-realm.json /tmp/linux-agent-user.json /tmp/linux-agent-password.json
+docker exec --user 0 "$KEYCLOAK_ID" chmod 0600 \
+  /tmp/linux-agent-realm.json /tmp/linux-agent-user.json /tmp/linux-agent-password.json
 docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" exec -T \
-  -e INSTALL_FIRST_USER="$FIRST_USER" \
-  -e INSTALL_FIRST_EMAIL="$FIRST_EMAIL" \
-  -e INSTALL_FIRST_PASSWORD="$FIRST_PASSWORD" \
-  keycloak /bin/bash -s <<'IN_CONTAINER'
+  -e INSTALL_FIRST_USER="$FIRST_USER" keycloak /bin/bash -s <<'IN_CONTAINER'
 set -Eeuo pipefail
 KCADM=/opt/keycloak/bin/kcadm.sh
+trap 'rm -f /tmp/linux-agent-realm.json /tmp/linux-agent-user.json /tmp/linux-agent-password.json' EXIT
 "$KCADM" config credentials --server http://127.0.0.1:8080 --realm master \
   --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
 if "$KCADM" get realms/linux-agent >/dev/null 2>&1; then
@@ -291,19 +295,14 @@ else
 fi
 USER_ID="$("$KCADM" get users -r linux-agent -q "username=$INSTALL_FIRST_USER" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
 if [[ -z "$USER_ID" ]]; then
-  if [[ -n "$INSTALL_FIRST_EMAIL" ]]; then
-    "$KCADM" create users -r linux-agent -s "username=$INSTALL_FIRST_USER" \
-      -s enabled=true -s "email=$INSTALL_FIRST_EMAIL" -s emailVerified=true >/dev/null
-  else
-    "$KCADM" create users -r linux-agent -s "username=$INSTALL_FIRST_USER" -s enabled=true >/dev/null
-  fi
+  "$KCADM" create users -r linux-agent -f /tmp/linux-agent-user.json >/dev/null
+  USER_ID="$("$KCADM" get users -r linux-agent -q "username=$INSTALL_FIRST_USER" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
 fi
-"$KCADM" set-password -r linux-agent --username "$INSTALL_FIRST_USER" \
-  --new-password "$INSTALL_FIRST_PASSWORD"
+[[ -n "$USER_ID" ]] || { echo "Initial Keycloak user was not created." >&2; exit 1; }
+"$KCADM" update "users/$USER_ID/reset-password" -r linux-agent -f /tmp/linux-agent-password.json
 echo "Initial dashboard account is ready."
-rm -f /tmp/linux-agent-realm.json
 IN_CONTAINER
-rm -f "$REALM_RENDERED"
+rm -f "$REALM_RENDERED" "$USER_RENDERED" "$PASSWORD_RENDERED"
 
 log "Configuring and validating the browser OAuth client"
 MCP_DOMAIN="$MCP_DOMAIN" MCP_RESOURCE_URI="$MCP_RESOURCE_URI" \
