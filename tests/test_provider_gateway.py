@@ -22,6 +22,16 @@ def test_provider_settings_require_key_and_hide_it_from_repr() -> None:
     })
     assert "secret-test-key" not in repr(settings)
 
+
+@pytest.mark.parametrize("api_key", ["token-ấ-invalid", "token-with internal-space"])
+def test_provider_settings_reject_non_ascii_or_whitespace_api_keys(api_key: str) -> None:
+    with pytest.raises(AgentError, match="ASCII"):
+        ProviderSettings.from_payload({
+            "provider": "openrouter",
+            "model": "openrouter/free",
+            "api_key": api_key,
+        })
+
 @pytest.mark.parametrize("provider", [None, [], {}, 123, "unsupported"])
 def test_provider_settings_reject_invalid_provider_type(provider: object) -> None:
     with pytest.raises(AgentError, match="không được hỗ trợ"):
