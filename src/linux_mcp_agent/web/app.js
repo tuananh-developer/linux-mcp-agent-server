@@ -1,5 +1,6 @@
 import { McpClient } from './mcp-client.mjs';
 import { mountAgent } from './agent-ui.js';
+import { beginLogin, clearAuthSession, completeLoginRedirect, getAccessToken } from './keycloak-auth.mjs';
 
 const $ = id => document.getElementById(id);
 const state = { connected: false, connecting: false, epoch: 0, tools: [] };
@@ -22,7 +23,7 @@ function renderConnection(label) {
   $('connection-status').textContent = label;
   $('sidebar-host').textContent = location.host;
   $('reconnect').disabled = state.connecting;
-  $('connect-submit').disabled = state.connecting;
+  $('login-keycloak').disabled = state.connecting;
   $('disconnect').disabled = !state.connected;
   $('tool-count').textContent = state.connected
     ? `${state.tools.length} công cụ sẵn sàng`
@@ -32,7 +33,7 @@ function renderConnection(label) {
 const client = new McpClient('/mcp', entry => {
   const time = new Date().toLocaleTimeString('vi-VN');
   $('last-updated').textContent = `MCP · ${entry.ok ? 'phản hồi' : 'yêu cầu thất bại'} lúc ${time}`;
-});
+}, getAccessToken);
 const agentUI = mountAgent({
   client,
   tools: () => state.tools,
@@ -45,7 +46,7 @@ function openConnection() {
   if (!$('connection-dialog').open) $('connection-dialog').showModal();
 }
 
-async function connect(token = '') {
+async function connect() {
   if (state.connecting) return;
   const epoch = ++state.epoch;
   state.connecting = true;
@@ -56,6 +57,8 @@ async function connect(token = '') {
   $('connection-error').textContent = '';
   renderConnection('Đang kết nối');
   try {
+    const token = await getAccessToken();
+    if (!token) throw Object.assign(new Error('Phiên Keycloak chưa có hoặc đã hết hạn. Hãy đăng nhập lại.'), { status: 401 });
     await client.connect(token);
     const tools = await client.list('tools/list');
     if (epoch !== state.epoch) return;
@@ -79,11 +82,10 @@ async function connect(token = '') {
 
 $('connection-open-top').addEventListener('click', openConnection);
 $('close-dialog').addEventListener('click', () => $('connection-dialog').close());
-$('connection-form').addEventListener('submit', event => {
-  event.preventDefault();
-  const token = $('bearer-token').value.trim();
-  $('bearer-token').value = '';
-  connect(token);
+$('login-keycloak').addEventListener('click', async () => {
+  $('connection-error').textContent = 'Đang chuyển đến Keycloak…';
+  try { await beginLogin(); }
+  catch (error) { $('connection-error').textContent = error instanceof Error ? error.message : 'Không thể bắt đầu đăng nhập Keycloak.'; }
 });
 $('disconnect').addEventListener('click', async () => {
   const epoch = ++state.epoch;
@@ -91,14 +93,26 @@ $('disconnect').addEventListener('click', async () => {
   state.connecting = false;
   state.tools = [];
   agentUI.reset();
-  $('bearer-token').value = '';
   renderConnection('Đã ngắt kết nối');
   banner();
   $('connection-dialog').close();
   await client.disconnect();
+  clearAuthSession();
   if (epoch === state.epoch) $('last-updated').textContent = 'Đã ngắt phiên MCP';
 });
-$('reconnect').addEventListener('click', () => connect(client.token));
-// Old dashboard bookmarks now open the single supported AI workspace.
-history.replaceState(null, '', '#agent');
-connect();
+$('reconnect').addEventListener('click', () => connect());
+
+async function initialize() {
+  try {
+    await completeLoginRedirect();
+    if (await getAccessToken()) await connect();
+    else { renderConnection('Cần đăng nhập Keycloak'); openConnection(); }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Đăng nhập Keycloak thất bại.';
+    banner(message);
+    $('connection-error').textContent = message;
+    renderConnection('Cần đăng nhập Keycloak');
+    openConnection();
+  }
+}
+void initialize();
