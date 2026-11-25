@@ -20,7 +20,7 @@ from starlette.routing import Route
 
 from linux_mcp_agent.auth import KeycloakIntrospectionVerifier
 from linux_mcp_agent.config import ConfigurationError, Settings
-from linux_mcp_agent.credential_vault import CredentialVault, CredentialVaultError, PROVIDERS
+from linux_mcp_agent.credential_vault import PROVIDERS, CredentialVault, CredentialVaultError
 
 SYSTEM_PROMPT = """You are the Linux Observatory assistant. Answer in the user's language.
 Use available MCP tools to observe real Linux data before making claims about this host.
