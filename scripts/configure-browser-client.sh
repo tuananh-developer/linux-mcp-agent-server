@@ -93,11 +93,11 @@ while IFS=, read -r candidate_id candidate_name; do
 done <<< "$SCOPE_CATALOG"
 
 if [[ -z "$BASIC_SCOPE_ID" ]]; then
-  "$KCADM" create client-scopes -r "$REALM" \\
-    -s name=basic \\
-    -s protocol=openid-connect \\
-    -s description="OIDC subject claim for browser credential ownership" \\
-    -s 'attributes."include.in.token.scope"=true' \\
+  "$KCADM" create client-scopes -r "$REALM" \
+    -s name=basic \
+    -s protocol=openid-connect \
+    -s description="OIDC subject claim for browser credential ownership" \
+    -s 'attributes."include.in.token.scope"=true' \
     -s 'attributes."display.on.consent.screen"=false' >/dev/null
   SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --format csv --noquotes)"
   while IFS=, read -r candidate_id candidate_name; do
@@ -115,12 +115,12 @@ fi
 
 BASIC_MAPPERS="$("$KCADM" get "client-scopes/$BASIC_SCOPE_ID/protocol-mappers/models" -r "$REALM")"
 if ! grep -Fq 'oidc-sub-mapper' <<<"$BASIC_MAPPERS"; then
-  "$KCADM" create "client-scopes/$BASIC_SCOPE_ID/protocol-mappers/models" -r "$REALM" \\
-    -s name=subject \\
-    -s protocol=openid-connect \\
-    -s protocolMapper=oidc-sub-mapper \\
-    -s consentRequired=false \\
-    -s 'config."access.token.claim"=true' \\
+  "$KCADM" create "client-scopes/$BASIC_SCOPE_ID/protocol-mappers/models" -r "$REALM" \
+    -s name=subject \
+    -s protocol=openid-connect \
+    -s protocolMapper=oidc-sub-mapper \
+    -s consentRequired=false \
+    -s 'config."access.token.claim"=true' \
     -s 'config."introspection.token.claim"=true' >/dev/null
 fi
 
