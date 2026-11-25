@@ -6,6 +6,35 @@ A read-only Linux observability MCP server for external Agentic AI clients. Buil
 
 Open `/` or `/dashboard` for live CPU, RAM, disk, network, process, service, port and alert views. The optional AI assistant is available at `/assistant`. Dashboard telemetry is requested through authenticated MCP tools; it does not require an LLM, database, or external API key. See [docs/12_dashboard.md](docs/12_dashboard.md) for data flow and security details.
 
+## Fresh installation (Ubuntu 24.04 LTS)
+
+For a new host, the recommended route is the automated installer. It provisions the Docker infrastructure (PostgreSQL, Keycloak and Caddy), installs the native MCP service, creates the first dashboard account, generates installation secrets, initializes the encrypted provider vault, and verifies the local HTTPS health endpoint.
+
+```bash
+git clone https://github.com/tuananh-developer/linux-mcp-agent-server.git
+cd linux-mcp-agent-server
+sudo bash scripts/install.sh
+```
+
+The installer currently supports Ubuntu 24.04 LTS on amd64 and arm64. It asks for the host's LAN IPv4 address and the first dashboard username/password. It uses the project's fixed `mcp.home.arpa` and `auth.home.arpa` hostnames because the browser OAuth client is configured for those origins.
+
+When installation completes, open `https://mcp.home.arpa/dashboard` on the host. Other LAN devices must resolve both hostnames to the server's LAN IP and trust the Caddy root CA at `/etc/linux-mcp-agent/caddy-root.crt`. The installer does not change the firewall: allow TCP 443 only from trusted LAN clients, and keep ports 3002, 8080 and 5432 private.
+
+The vault master key and generated service secrets are stored in protected system directories; do not delete them. The first dashboard user signs in with the username/password entered during setup, then configures an AI provider and saves its API key from the dashboard.
+
+Management commands (run from the repository clone):
+
+```bash
+sudo bash scripts/doctor.sh
+sudo systemctl restart linux-mcp-agent.service
+sudo bash scripts/upgrade.sh
+sudo bash scripts/uninstall.sh
+```
+
+The upgrade keeps the Keycloak database, server configuration and provider vault. Uninstall preserves data by default; `--purge-data` requires a second explicit confirmation and permanently deletes it. If setup stops part-way through, rerun `sudo bash scripts/install.sh --resume` from the same clone; generated secrets and existing database/vault data are reused.
+
+See [docs/13_installation.md](docs/13_installation.md) for the full setup, client trust and recovery runbook. The manual systemd and local demo paths remain available for operators and development.
+
 ## Scope
 
 The server exposes:
