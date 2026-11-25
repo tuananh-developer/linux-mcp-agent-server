@@ -271,12 +271,14 @@ done
 log "Creating Keycloak realm, clients and initial dashboard user"
 MCP_DOMAIN="$MCP_DOMAIN" AUTH_DOMAIN="$AUTH_DOMAIN" \
 RESOURCE_SERVER_SECRET="$RESOURCE_SERVER_SECRET" AGENT_CLIENT_SECRET="$AGENT_CLIENT_SECRET" \
-INITIAL_ADMIN_USERNAME="$FIRST_USER" INITIAL_ADMIN_PASSWORD="$FIRST_PASSWORD" \
-INITIAL_ADMIN_EMAIL="$FIRST_EMAIL" \
 python3 "$INSTALL_DIR/scripts/render-keycloak-realm.py" \
   --template "$REALM_TEMPLATE" --output "$REALM_RENDERED"
 docker cp "$REALM_RENDERED" "$KEYCLOAK_ID:/tmp/linux-agent-realm.json"
-docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" exec -T keycloak /bin/bash -s <<'IN_CONTAINER'
+docker compose --env-file "$COMPOSE_ENV" -f "$COMPOSE_FILE" exec -T \
+  -e INSTALL_FIRST_USER="$FIRST_USER" \
+  -e INSTALL_FIRST_EMAIL="$FIRST_EMAIL" \
+  -e INSTALL_FIRST_PASSWORD="$FIRST_PASSWORD" \
+  keycloak /bin/bash -s <<'IN_CONTAINER'
 set -Eeuo pipefail
 KCADM=/opt/keycloak/bin/kcadm.sh
 "$KCADM" config credentials --server http://127.0.0.1:8080 --realm master \
@@ -285,8 +287,20 @@ if "$KCADM" get realms/linux-agent >/dev/null 2>&1; then
   echo "Realm linux-agent already exists; preserving its users, clients and settings."
 else
   "$KCADM" create realms -f /tmp/linux-agent-realm.json
-  echo "Created realm linux-agent and the first dashboard user."
+  echo "Created realm linux-agent."
 fi
+USER_ID="$("$KCADM" get users -r linux-agent -q "username=$INSTALL_FIRST_USER" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
+if [[ -z "$USER_ID" ]]; then
+  if [[ -n "$INSTALL_FIRST_EMAIL" ]]; then
+    "$KCADM" create users -r linux-agent -s "username=$INSTALL_FIRST_USER" \
+      -s enabled=true -s "email=$INSTALL_FIRST_EMAIL" -s emailVerified=true >/dev/null
+  else
+    "$KCADM" create users -r linux-agent -s "username=$INSTALL_FIRST_USER" -s enabled=true >/dev/null
+  fi
+fi
+"$KCADM" set-password -r linux-agent --username "$INSTALL_FIRST_USER" \
+  --new-password "$INSTALL_FIRST_PASSWORD"
+echo "Initial dashboard account is ready."
 rm -f /tmp/linux-agent-realm.json
 IN_CONTAINER
 rm -f "$REALM_RENDERED"
