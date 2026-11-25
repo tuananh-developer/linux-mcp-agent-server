@@ -61,8 +61,16 @@ class CredentialVault:
             metadata = key_file.lstat()
             if not stat.S_ISREG(metadata.st_mode):
                 raise CredentialVaultError("Provider vault key must be a regular file.")
-            if stat.S_IMODE(metadata.st_mode) & 0o077:
-                raise CredentialVaultError("Provider vault key permissions must be 0600 or stricter.")
+            # A key loaded through CREDENTIALS_DIRECTORY is a systemd-managed
+            # runtime credential. systemd stages it in a per-unit directory
+            # and restricts access to the unit's user; its staged mode can
+            # differ from the protected source file's mode. Enforce 0600 on
+            # operator-provided key files, but trust systemd's credential
+            # isolation for files delivered through CREDENTIALS_DIRECTORY.
+            if not credentials_dir and stat.S_IMODE(metadata.st_mode) & 0o077:
+                raise CredentialVaultError(
+                    "Provider vault key file permissions must be 0600 or stricter."
+                )
             key = key_file.read_bytes()
         except OSError as exc:
             raise CredentialVaultError("Cannot read the provider vault key.") from exc

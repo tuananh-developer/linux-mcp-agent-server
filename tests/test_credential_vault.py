@@ -85,3 +85,43 @@ def test_vault_from_environment_requires_a_32_byte_key(tmp_path: Path, monkeypat
 
     with pytest.raises(CredentialVaultError, match="32 bytes"):
         CredentialVault.from_environment()
+
+
+def test_vault_from_systemd_credential_accepts_systemd_managed_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    credentials_dir = tmp_path / "systemd-credentials"
+    credentials_dir.mkdir(mode=0o700)
+    key_file = credentials_dir / "provider-vault-key"
+    key_file.write_bytes(os.urandom(32))
+    # systemd exposes credentials through its isolated per-unit runtime
+    # directory; do not require the staged copy to retain the source file mode.
+    key_file.chmod(0o444)
+
+    store_path = tmp_path / "state" / "provider-credentials.json"
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(credentials_dir))
+    monkeypatch.setenv("PROVIDER_VAULT_FILE", str(store_path))
+    monkeypatch.delenv("PROVIDER_VAULT_KEY_FILE", raising=False)
+
+    vault = CredentialVault.from_environment()
+    assert vault is not None
+    vault.put("user-a", "openrouter", "openrouter/free", "key-a")
+    assert vault.get("user-a", "openrouter") == {
+        "provider": "openrouter",
+        "model": "openrouter/free",
+        "api_key": "key-a",
+    }
+
+
+def test_vault_from_explicit_key_file_rejects_permissive_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key_file = tmp_path / "provider-vault.key"
+    key_file.write_bytes(os.urandom(32))
+    key_file.chmod(0o640)
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    monkeypatch.setenv("PROVIDER_VAULT_KEY_FILE", str(key_file))
+
+    with pytest.raises(CredentialVaultError, match="permissions"):
+        CredentialVault.from_environment()
+
