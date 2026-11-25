@@ -19,7 +19,7 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -89,7 +89,7 @@ class CredentialVault:
         return f"linux-mcp-agent/provider-vault/v1/{subject}/{provider}/{model}".encode()
 
     @contextmanager
-    def _locked(self) -> Generator[None, None, None]:
+    def _locked(self) -> Generator[None]:
         with self._thread_lock:
             try:
                 self.storage_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
