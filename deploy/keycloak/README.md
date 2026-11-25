@@ -6,8 +6,8 @@ Keycloak 26.8.1 is the Authorization Server. The MCP process is only a resource 
 
 A pre-configured realm template is provided at `deploy/keycloak/realm-linux-agent.example.json` containing:
 - Realm `linux-agent` (`sslRequired: external`, 300s access token lifespan).
-- Client scopes `mcp.read` and `mcp.logs.read` (`include.in.token.scope=true`).
-- Public browser client `linux-observatory-browser` with the built-in `basic` and project `mcp.read` scopes as defaults. In Keycloak 26.8.1, the built-in `basic` scope contains the Subject (`sub`) mapper required to partition saved provider credentials by signed-in user.
+- Client scopes `basic`, `mcp.read` and `mcp.logs.read` (`include.in.token.scope=true`). The project explicitly defines `basic` with Keycloak's Subject (`sub`) mapper because custom realm imports are not guaranteed to provision the built-in scope.
+- Public browser client `linux-observatory-browser` with `basic` and project `mcp.read` scopes as defaults. The `basic` mapper adds `sub` to access tokens and token-introspection responses so saved provider credentials are partitioned by signed-in user.
 - Confidential introspection client `linux-mcp-resource-server` with `resource_url=https://mcp.home.arpa/mcp`.
 - Confidential machine client `linux-mcp-agent-client` with service account enabled and an audience mapper binding `https://mcp.home.arpa/mcp` into both the access token and token introspection response.
 
@@ -32,6 +32,6 @@ Create a machine client for an external MCP Client (for example `linux-mcp-agent
 
 ## Token and introspection checks
 
-The MCP server calls the loopback-only `MCP_INTROSPECTION_URL` (default `http://127.0.0.1:8080/realms/linux-agent/protocol/openid-connect/token/introspect`) and rejects inactive tokens, missing/expired `exp`, future `nbf`, wrong `iss`, wrong `aud`, missing `mcp.read`, and tokens without a client ID. The SDK additionally enforces the resource value and base scope. The browser credential-vault endpoints additionally require the validated token's `sub`; ensure the browser client has the built-in `basic` scope so the Subject mapper adds it to access tokens and introspection responses. `read_allowed_log` checks `mcp.logs.read` inside the tool. No token or secret is written to application logs.
+The MCP server calls the loopback-only `MCP_INTROSPECTION_URL` (default `http://127.0.0.1:8080/realms/linux-agent/protocol/openid-connect/token/introspect`) and rejects inactive tokens, missing/expired `exp`, future `nbf`, wrong `iss`, wrong `aud`, missing `mcp.read`, and tokens without a client ID. The SDK additionally enforces the resource value and base scope. The browser credential-vault endpoints additionally require the validated token's `sub`; ensure the browser client has the project-defined `basic` scope, which contains a Subject mapper for access tokens and introspection responses. `scripts/configure-browser-client.sh` creates or repairs this scope on existing realms. `read_allowed_log` checks `mcp.logs.read` inside the tool. No token or secret is written to application logs.
 
 Keycloak Resource Indicators and the latest MCP protocol revision are documented as experimental in Keycloak 26.8.1. Until tests prove correct `resource` -> `aud` behavior and introspection claims on the target realm, keep LAN access closed. Do not bypass the audience check to make a demo work.

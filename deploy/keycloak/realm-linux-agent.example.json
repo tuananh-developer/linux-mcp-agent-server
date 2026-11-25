@@ -6,6 +6,27 @@
   "accessTokenLifespan": 300,
   "clientScopes": [
     {
+      "name": "basic",
+      "description": "OIDC subject claim for browser credential ownership",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "subject",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
       "name": "mcp.read",
       "description": "Base read-only access to the Linux MCP Agent Server",
       "protocol": "openid-connect",

@@ -78,10 +78,51 @@ fi
   -s "webOrigins=[\"$ORIGIN\"]" \
   -s 'attributes."pkce.code.challenge.method"=S256' >/dev/null
 
-# The client-scopes collection does not filter by ?name=. Fetch the catalog
-# once and select the exact ID locally instead of accidentally using the last
-# scope in the realm.
+# The browser credential vault partitions provider keys by the authenticated
+# user's OIDC subject. Some custom realm imports do not provision Keycloak's
+# built-in "basic" scope, so create/repair it before attaching it to the client.
+# Fetch the complete catalog and select exact IDs locally; the collection
+# endpoint does not reliably support filtering by ?name=.
 SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --format csv --noquotes)"
+BASIC_SCOPE_ID=""
+while IFS=, read -r candidate_id candidate_name; do
+  if [[ "$candidate_name" == "basic" ]]; then
+    BASIC_SCOPE_ID="$candidate_id"
+    break
+  fi
+done <<< "$SCOPE_CATALOG"
+
+if [[ -z "$BASIC_SCOPE_ID" ]]; then
+  "$KCADM" create client-scopes -r "$REALM" \
+    -s name=basic \
+    -s protocol=openid-connect \
+    -s description="OIDC subject claim for browser credential ownership" \
+    -s 'attributes."include.in.token.scope"=true' \
+    -s 'attributes."display.on.consent.screen"=false' >/dev/null
+  SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --format csv --noquotes)"
+  while IFS=, read -r candidate_id candidate_name; do
+    if [[ "$candidate_name" == "basic" ]]; then
+      BASIC_SCOPE_ID="$candidate_id"
+      break
+    fi
+  done <<< "$SCOPE_CATALOG"
+fi
+
+[[ -n "$BASIC_SCOPE_ID" ]] || {
+  echo "ERROR: Could not create or locate the Keycloak 'basic' client scope." >&2
+  exit 1
+}
+
+BASIC_MAPPERS="$("$KCADM" get "client-scopes/$BASIC_SCOPE_ID/protocol-mappers/models" -r "$REALM")"
+if ! grep -Fq 'oidc-sub-mapper' <<<"$BASIC_MAPPERS"; then
+  "$KCADM" create "client-scopes/$BASIC_SCOPE_ID/protocol-mappers/models" -r "$REALM" \
+    -s name=subject \
+    -s protocol=openid-connect \
+    -s protocolMapper=oidc-sub-mapper \
+    -s consentRequired=false \
+    -s 'config."access.token.claim"=true' \
+    -s 'config."introspection.token.claim"=true' >/dev/null
+fi
 
 for SCOPE_NAME in basic mcp.read mcp.logs.read; do
   SCOPE_ID=""
