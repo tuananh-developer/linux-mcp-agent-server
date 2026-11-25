@@ -20,7 +20,7 @@ is_this_demo_process() {
   local pid="$1" process_name command_line process_root
   [[ -r "/proc/$pid/cmdline" && -r "/proc/$pid/cwd" ]] || return 1
   process_name="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
-  [[ "$process_name" =~ ^python([0-9]+(\\.[0-9]+)*)?$ ]] || return 1
+  [[ "$process_name" =~ ^python([0-9]+(\.[0-9]+)*)?$ ]] || return 1
   command_line="$(ps -p "$pid" -o args= 2>/dev/null || true)"
   [[ "$command_line" == *"-m linux_mcp_agent"* ]] || return 1
   process_root="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
