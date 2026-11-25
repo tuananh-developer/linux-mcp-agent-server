@@ -49,8 +49,8 @@ if [[ -z "$CLIENT_UUID" ]]; then
     -s implicitFlowEnabled=false \
     -s directAccessGrantsEnabled=false \
     -s protocol=openid-connect \
-    -s "redirectUris=[\\"$ORIGIN/*\\"]" \
-    -s "webOrigins=[\\"$ORIGIN\\"]" \
+    -s "redirectUris=[\"$ORIGIN/*\"]" \
+    -s "webOrigins=[\"$ORIGIN\"]" \
     -s 'attributes."pkce.code.challenge.method"=S256'
   CLIENT_UUID="$("$KCADM" get clients -r "$REALM" -q "clientId=$CLIENT_ID" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
 fi
@@ -68,8 +68,8 @@ fi
   -s implicitFlowEnabled=false \
   -s directAccessGrantsEnabled=false \
   -s protocol=openid-connect \
-  -s "redirectUris=[\\"$ORIGIN/*\\"]" \
-  -s "webOrigins=[\\"$ORIGIN\\"]" \
+  -s "redirectUris=[\"$ORIGIN/*\"]" \
+  -s "webOrigins=[\"$ORIGIN\"]" \
   -s 'attributes."pkce.code.challenge.method"=S256' >/dev/null
 
 # The client-scopes collection does not filter by ?name=. Fetch the catalog
@@ -78,7 +78,7 @@ fi
 SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --format csv --noquotes)"
 
 for SCOPE_NAME in mcp.read mcp.logs.read; do
-  SCOPE_ID="$(printf '%s\\n' "$SCOPE_CATALOG" | awk -F, -v wanted="$SCOPE_NAME" '$2 == wanted { print $1; exit }')"
+  SCOPE_ID="$(printf '%s\n' "$SCOPE_CATALOG" | awk -F, -v wanted="$SCOPE_NAME" '$2 == wanted { print $1; exit }')"
   [[ -n "$SCOPE_ID" ]] || {
     echo "ERROR: Required Keycloak client scope '$SCOPE_NAME' is missing from realm '$REALM'." >&2
     exit 1
@@ -125,5 +125,5 @@ if ! grep -Fq 'mcp-resource-audience' <<<"$MAPPERS"; then
     -s 'config."introspection.token.claim"=true' >/dev/null
 fi
 
-printf 'Verified Keycloak browser client: %s (mcp.read default, mcp.logs.read optional, PKCE S256)\\n' "$CLIENT_ID"
+printf 'Verified Keycloak browser client: %s (mcp.read default, mcp.logs.read optional, PKCE S256)\n' "$CLIENT_ID"
 IN_CONTAINER
