@@ -16,6 +16,12 @@ const PROVIDER_LABELS = {
   ollama: 'Ollama',
 };
 
+const MARKDOWN_TAGS = new Set([
+  'a', 'blockquote', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'hr', 'li', 'ol', 'p', 'pre', 's', 'strong', 'table', 'tbody', 'td', 'th',
+  'thead', 'tr', 'ul',
+]);
+
 export function mountAgent({ client, tools, connected, toast, getAccessToken }) {
   const $ = id => document.getElementById(id);
   const input = $('chat-input');
@@ -55,12 +61,7 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
       return;
     }
 
-    const allowedTags = new Set([
-      'a', 'blockquote', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'hr', 'li', 'ol', 'p', 'pre', 's', 'strong', 'table', 'tbody', 'td', 'th',
-      'thead', 'tr', 'ul',
-    ]);
-    if (!allowedTags.has(item.tag)) {
+    if (!MARKDOWN_TAGS.has(item.tag)) {
       parent.append(document.createTextNode(item.children.map(child => child.value ?? '').join('')));
       return;
     }
