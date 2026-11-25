@@ -1,0 +1,156 @@
+/** Minimal same-origin MCP Streamable HTTP client. Credentials stay in memory. */
+export class McpError extends Error {
+  constructor(message, status = 0) { super(message); this.name = 'McpError'; this.status = status; }
+}
+
+export class McpClient {
+  constructor(endpoint, onActivity = () => {}, tokenProvider = null) {
+    this.endpoint = endpoint;
+    this.onActivity = onActivity;
+    this.tokenProvider = tokenProvider;
+    this.session = null;
+    this.version = null;
+    this.token = '';
+    this.sequence = 0;
+    this.generation = 0;
+  }
+
+  async connect(token = '') {
+    await this.disconnect();
+    this.token = token;
+    const result = await this.request('initialize', {
+      protocolVersion: '2025-11-25', capabilities: {},
+      clientInfo: { name: 'linux-observatory-dashboard', version: '0.1.0' },
+    });
+    this.version = result.protocolVersion;
+    await this.request('notifications/initialized', undefined, true);
+    return result;
+  }
+
+  async disconnect() {
+    const headers = this.headers();
+    const hadSession = this.session;
+    this.generation += 1;
+    this.session = null;
+    this.version = null;
+    this.token = '';
+    if (hadSession) {
+      try { await fetch(this.endpoint, { method: 'DELETE', headers, signal: AbortSignal.timeout(2000) }); }
+      catch { /* Session expiration is also managed by the server. */ }
+    }
+  }
+
+  headers() {
+    const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    if (this.session) headers['Mcp-Session-Id'] = this.session;
+    if (this.version) headers['MCP-Protocol-Version'] = this.version;
+    return headers;
+  }
+
+  async request(method, params, notification = false) {
+    const started = performance.now();
+    const generation = this.generation;
+    const id = ++this.sequence;
+    const payload = { jsonrpc: '2.0', method };
+    if (!notification) payload.id = id;
+    if (params !== undefined) payload.params = params;
+    try {
+      if (this.tokenProvider) {
+        const freshToken = await this.tokenProvider();
+        if (!freshToken) throw new McpError('Phiên Keycloak đã hết hạn. Hãy đăng nhập lại.', 401);
+        this.token = freshToken;
+      }
+      if (generation !== this.generation) throw new McpError('Kết nối đã thay đổi.');
+      const response = await fetch(this.endpoint, {
+        method: 'POST', headers: this.headers(), body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000), cache: 'no-store', redirect: 'error',
+      });
+      if (!response.ok) {
+        const messages = {
+          401: 'Phiên đăng nhập Keycloak chưa có hoặc đã hết hạn. Hãy đăng nhập lại bằng Keycloak.',
+          403: 'Truy cập bị từ chối. Kiểm tra scope mcp.read và cấu hình Origin.',
+          404: 'Endpoint MCP không tồn tại hoặc phiên đã hết hạn. Hãy kết nối lại.',
+          421: 'Host không được phép. Kiểm tra MCP_ALLOWED_HOSTS.',
+          502: 'Caddy không kết nối được MCP backend. Kiểm tra MCP service, MCP_PORT và MCP_UPSTREAM.',
+          503: 'MCP backend hiện không khả dụng. Kiểm tra trạng thái linux-mcp-agent.service.',
+          504: 'MCP backend quá thời gian phản hồi qua Caddy. Kiểm tra log và tải hệ thống.'
+        };
+        throw new McpError(messages[response.status] || `Server trả về HTTP ${response.status}.`, response.status);
+      }
+      if (generation !== this.generation) throw new McpError('Kết nối đã thay đổi.');
+      const session = response.headers.get('mcp-session-id');
+      if (session) this.session = session;
+      if (notification || response.status === 202) return null;
+      let message;
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        message = await this.readEventStream(response, id);
+      } else {
+        message = await response.json();
+      }
+      if (generation !== this.generation) throw new McpError('Kết nối đã thay đổi.');
+      if (!message || message.id !== id) throw new McpError('Phản hồi MCP không khớp yêu cầu.');
+      if (message.error) throw new McpError(message.error.message || 'Yêu cầu MCP thất bại.');
+      if (message.result?.isError) {
+        const detail = message.result.content?.filter(item => item.type === 'text').map(item => item.text).join('\n');
+        throw new McpError(detail || 'Tool trả về lỗi.');
+      }
+      this.onActivity({ method, ok: true, ms: performance.now() - started });
+      return message.result;
+    } catch (error) {
+      this.onActivity({ method, ok: false, ms: performance.now() - started });
+      if (error instanceof McpError) throw error;
+      const detail = error?.name === 'TimeoutError' || error?.name === 'AbortError'
+        ? 'Yêu cầu MCP hết thời gian chờ. Kiểm tra trạng thái server và thử lại.'
+        : 'Trình duyệt không thiết lập được kết nối tới /mcp. Kiểm tra HTTPS certificate trên thiết bị này, DNS mcp.home.arpa và cổng 443/Caddy.';
+      throw new McpError(detail, -1);
+    }
+  }
+
+  async readEventStream(response, id) {
+    if (!response.body) throw new McpError('Phản hồi MCP trống.');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        let boundary;
+        while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
+          const frame = buffer.slice(0, boundary.index);
+          buffer = buffer.slice(boundary.index + boundary[0].length);
+          const data = frame.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
+          if (!data) continue;
+          const message = JSON.parse(data);
+          if (message.id === id) return message;
+        }
+        if (buffer.length > 2_000_000) throw new McpError('Phản hồi MCP vượt giới hạn dashboard.');
+        if (done) break;
+      }
+      throw new McpError('Luồng MCP kết thúc mà chưa có kết quả.');
+    } finally { await reader.cancel(); }
+  }
+
+  async list(method) {
+    const key = method.split('/')[0];
+    const items = [];
+    let cursor;
+    for (let page = 0; page < 20; page += 1) {
+      const result = await this.request(method, cursor ? { cursor } : {});
+      items.push(...(result[key] || []));
+      if (!result.nextCursor) return items;
+      if (result.nextCursor === cursor) throw new McpError('Server lặp lại cursor phân trang.');
+      cursor = result.nextCursor;
+    }
+    throw new McpError('Registry vượt giới hạn phân trang của dashboard.');
+  }
+
+  async callTool(name, args = {}) {
+    const result = await this.request('tools/call', { name, arguments: args });
+    if (result.structuredContent) return result.structuredContent;
+    const text = result.content?.find(item => item.type === 'text')?.text;
+    if (!text) throw new McpError('Tool không trả về dữ liệu JSON.');
+    try { return JSON.parse(text); } catch { throw new McpError('Dữ liệu tool không phải JSON hợp lệ.'); }
+  }
+}

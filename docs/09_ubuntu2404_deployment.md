@@ -5,7 +5,7 @@
 - Ubuntu 24.04 LTS x86_64, systemd and journald.
 - Python 3.15.2 (managed by uv 0.13.6; CI also checks 3.14.10), Git, curl, build tools for compiling C extensions where a wheel is unavailable.
 - Docker Engine + Docker Compose plugin 5.6.1 for Keycloak, PostgreSQL and Caddy only.
-- Firewall: allow TCP 443 only from the selected LAN subnet/client IP. Do not expose 3000, 8080 or 5432.
+- Firewall: allow TCP 443 only from the selected LAN subnet/client IP. Do not expose 3002, 8080 or 5432.
 
 ## Prepare Python environment
 
@@ -43,10 +43,10 @@ Follow `deploy/systemd/README.md`. The MCP service binds to loopback only, uses 
 
 ## Acceptance checks
 
-- `curl http://127.0.0.1:3000/healthz` returns healthy.
+- `curl http://127.0.0.1:3002/healthz` returns healthy.
 - Keycloak OIDC discovery is reachable over trusted HTTPS.
 - Access token contains the canonical MCP audience and required scope.
 - From a second LAN host, a valid MCP client can initialize and list tools/resources/prompts.
 - Invalid token, wrong audience, missing scopes and admin UI requests from LAN are rejected.
 - `systemctl show linux-mcp-agent -p User,Group,SupplementaryGroups` confirms the service account.
-- `ss -lntp` confirms 3000 and 8080 are bound to loopback only; PostgreSQL is not published.
+- `ss -lntp` confirms 3002 and 8080 are bound to loopback only; PostgreSQL is not published.

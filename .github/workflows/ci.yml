@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feat/extended-linux-observability]
   workflow_dispatch:
 
 permissions:
@@ -56,6 +56,17 @@ jobs:
 
       - name: Pytest
         run: uv run pytest
+
+      - name: Browser JavaScript syntax
+        run: |
+          node --check src/linux_mcp_agent/web/overview.js
+          node --check src/linux_mcp_agent/web/app.js
+          node --check src/linux_mcp_agent/web/agent-ui.js
+          node --check src/linux_mcp_agent/web/mcp-client.mjs
+          node --check src/linux_mcp_agent/web/keycloak-auth.mjs
+
+      - name: Browser MCP, auth and agent loop tests
+        run: node --test tests/dashboard_transport.test.mjs tests/keycloak_auth.test.mjs tests/agent_loop.test.mjs tests/markdown.test.mjs
 
       - name: Export resolved dependency lock
         if: matrix.python-version == '3.15.2'

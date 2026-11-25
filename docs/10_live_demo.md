@@ -40,12 +40,16 @@ In terminal 1, from the repository root:
 
     bash scripts/start-demo.sh
 
-The helper validates the Compose configuration, starts PostgreSQL and Keycloak, waits for Keycloak's health check, and starts Caddy's LAN profile. It then:
-- reuses the MCP service if its local health endpoint is already responding;
-- restarts the installed linux-mcp-agent systemd service when available; or
-- launches uv run linux-mcp-agent in the foreground using ~/.config/linux-mcp-agent/server.env.
+The helper validates the Compose configuration, starts PostgreSQL and Keycloak, ensures the MCP service is healthy, then starts Caddy with the matching MCP upstream port. It supports:
+- reusing an already healthy MCP process;
+- restarting the installed linux-mcp-agent systemd service when needed; or
+- launching the app in the background when no systemd unit is installed.
 
-When the helper launches the app in the foreground, leave terminal 1 running during the demo.
+It then exports the Caddy local root CA to ~/.config/linux-mcp-agent/caddy-root.crt and verifies the HTTPS /healthz route end to end. For a locally launched background process, inspect logs with `tail -f ~/.local/state/linux-mcp-agent/demo-server.log` and stop it with `bash scripts/stop-demo.sh`.
+
+Before opening the dashboard for the first time, create a human login user in the `linux-agent` realm using the Keycloak Admin Console at `https://auth.home.arpa/admin/`. Demo startup automatically provisions the public PKCE browser client; it does not create a user or set a default password.
+
+Open `https://mcp.home.arpa/dashboard` or `https://mcp.home.arpa/assistant` in the browser inside the VM. Select **Đăng nhập bằng Keycloak** when prompted. The browser performs the OAuth PKCE flow and refreshes access tokens automatically while the SSO session is active; do not run a token curl command or paste a Bearer token into the page.
 
 ## 3. Run the live acceptance client
 
@@ -64,15 +68,13 @@ The access token is held in memory only. The script does not print or save the t
 
 ## TLS certificate note
 
-TLS verification is enabled by default. Install the Caddy local root CA on the machine running the demo client, or pass its PEM path:
+TLS verification is always enabled. When the Caddy Compose service is running, the demo client automatically reads its local root CA from the Caddy container and uses it to validate both `mcp.home.arpa` and `auth.home.arpa`. It does not disable certificate verification.
+
+If automatic discovery is unavailable, provide the PEM file explicitly:
 
     uv run python scripts/demo_live.py --ca-cert /path/to/caddy-local-root.crt
 
-For a temporary demo on an isolated local VM only, --insecure disables certificate verification:
-
-    uv run python scripts/demo_live.py --insecure
-
-Do not use --insecure for a production client or an untrusted network.
+You can also set `MCP_DEMO_CA_CERT` to that PEM file path. The explicit CA file takes precedence over automatic discovery. The `--insecure` option is intentionally not supported.
 
 ## Expected result
 

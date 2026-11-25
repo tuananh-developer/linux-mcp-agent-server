@@ -1,6 +1,6 @@
 # systemd deployment
 
-The MCP process is native on the Ubuntu host, runs as `linux-mcp-agent`, and binds only to `127.0.0.1:3000`. The unit deliberately grants no root privileges. It joins `systemd-journal` only because the journal reader needs to read the configured unit aliases; this group grants broader journal visibility and is a documented residual risk.
+The MCP process is native on the Ubuntu host, runs as `linux-mcp-agent`, and binds only to `127.0.0.1:3002`. The unit deliberately grants no root privileges. It joins `systemd-journal` only because the journal reader needs to read the configured unit aliases; this group grants broader journal visibility and is a documented residual risk.
 
 ## Install
 
@@ -25,7 +25,7 @@ sudo uv sync --locked --no-dev
 sudo systemctl daemon-reload
 sudo systemctl enable --now linux-mcp-agent
 sudo systemctl status linux-mcp-agent
-curl -fsS http://127.0.0.1:3000/healthz
+curl -fsS http://127.0.0.1:3002/healthz
 ```
 
 The project currently pins direct dependencies in `pyproject.toml`. Generate and commit `uv.lock` with `uv lock` on a network-connected development machine before using `uv sync --locked` in a clean deployment.

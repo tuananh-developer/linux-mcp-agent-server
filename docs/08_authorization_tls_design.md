@@ -6,6 +6,12 @@
 - Linux MCP Agent Server is a resource server. It never issues a token.
 - External Agent/MCP Client obtains an access token using the configured client flow and sends `Authorization: Bearer ...`.
 
+## Browser login
+
+The Linux Observatory is a public OAuth client named `linux-observatory-browser`. It uses Authorization Code flow with PKCE S256; it has no client secret and does not enable password or implicit grants. The browser obtains a short-lived MCP-audience token after an interactive user login. Access and refresh tokens stay in browser memory; the browser never receives the resource-server introspection secret or machine-client secret.
+
+`scripts/configure-browser-client.sh` provisions this client idempotently in the existing `linux-agent` realm during demo startup. The `mcp.read` scope is attached by default; `mcp.logs.read` is optional and requested by the UI. The browser client has the MCP origin as its only web origin and `https://mcp.home.arpa/*` as its redirect pattern. Caddy exposes only OIDC discovery, authorization, token, JWKS, login-action and static login-theme routes to browser clients; Keycloak admin routes remain loopback-only. An administrator creates a realm user once for interactive login.
+
 ## Token validation
 
 The MCP SDK requires `mcp.read` globally. `KeycloakIntrospectionVerifier` calls `MCP_INTROSPECTION_URL` on the private loopback Keycloak HTTP listener using a confidential resource-server client; Caddy never publishes token introspection to the LAN. It accepts a token only when `active=true`, `iss` exactly equals the configured issuer, `exp` exists and is in the future, `nbf` is not in the future, `aud` contains the exact canonical MCP resource URI, `client_id` exists, and `mcp.read` is granted. It returns `AccessToken.resource` equal to `MCP_RESOURCE_URI`; `AuthSettings.validate_token_resource=True` enforces the same resource at SDK level.
@@ -18,7 +24,7 @@ Canonical resource URI: `https://mcp.home.arpa/mcp`. The MCP client must request
 
 ## TLS and LAN
 
-Caddy 2.11.7 uses `tls internal` for both `mcp.home.arpa` and `auth.home.arpa`. Export only the Caddy root certificate to client trust stores; never export the CA private key. MCP backend `127.0.0.1:3000`, Keycloak `127.0.0.1:8080`, PostgreSQL internal Docker network. UFW should allow TCP 443 only from the selected demo subnet/client addresses.
+Caddy 2.11.7 uses `tls internal` for both `mcp.home.arpa` and `auth.home.arpa`. Export only the Caddy root certificate to client trust stores; never export the CA private key. MCP backend `127.0.0.1:3002`, Keycloak `127.0.0.1:8080`, PostgreSQL internal Docker network. UFW should allow TCP 443 only from the selected demo subnet/client addresses.
 
 ## Reverse proxy route allowlist
 
