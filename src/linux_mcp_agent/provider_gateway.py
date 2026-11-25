@@ -38,7 +38,7 @@ class ProviderSettings:
             raise AgentError("Chưa có cấu hình nhà cung cấp AI.")
         raw = cast(dict[str, Any], raw)
         provider = raw.get("provider")
-        if not isinstance(provider, str) or provider not in {"gemini", "openai", "anthropic", "ollama"}:
+        if not isinstance(provider, str) or provider not in {"gemini", "openai", "openrouter", "anthropic", "ollama"}:
             raise AgentError("Nhà cung cấp AI không được hỗ trợ.")
         model = raw.get("model")
         if not isinstance(model, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", model.strip()):
@@ -87,6 +87,7 @@ class ProviderGateway:
         return {
             "gemini": "https://generativelanguage.googleapis.com/v1beta",
             "openai": "https://api.openai.com/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
             "anthropic": "https://api.anthropic.com/v1",
             "ollama": self.settings.base_url,
         }[self.settings.provider]
@@ -95,8 +96,11 @@ class ProviderGateway:
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if self.settings.provider == "gemini":
             headers["x-goog-api-key"] = self.settings.api_key
-        elif self.settings.provider == "openai":
+        elif self.settings.provider in {"openai", "openrouter"}:
             headers["Authorization"] = f"Bearer {self.settings.api_key}"
+            if self.settings.provider == "openrouter":
+                headers["HTTP-Referer"] = "https://mcp.home.arpa"
+                headers["X-Title"] = "Linux Observatory"
         elif self.settings.provider == "anthropic":
             headers["Authorization"] = f"Bearer {self.settings.api_key}"
             headers["anthropic-version"] = "2026-10-21"
@@ -170,6 +174,7 @@ class ProviderGateway:
         provider_labels = {
             "gemini": "Google Gemini",
             "openai": "OpenAI",
+            "openrouter": "OpenRouter",
             "anthropic": "Anthropic",
             "ollama": "Ollama",
         }
@@ -244,7 +249,7 @@ class ProviderGateway:
         payload: dict[str, Any] = {
             "model": self.settings.model,
             "messages": wire_messages,
-            "max_completion_tokens": 1536,
+            ("max_tokens" if self.settings.provider == "openrouter" else "max_completion_tokens"): 1536,
             "tool_choice": "auto",
             "parallel_tool_calls": False,
         }
@@ -584,7 +589,7 @@ class ProviderGateway:
         async with self.limit:
             if self.settings.provider == "gemini":
                 result = await asyncio.to_thread(self._chat_gemini, messages, tools)
-            elif self.settings.provider == "openai":
+            elif self.settings.provider in {"openai", "openrouter"}:
                 result = await asyncio.to_thread(self._chat_openai, messages, tools)
             elif self.settings.provider == "anthropic":
                 result = await asyncio.to_thread(self._chat_anthropic, messages, tools)
