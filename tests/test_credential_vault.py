@@ -45,7 +45,9 @@ def test_vault_delete_is_scoped_to_subject_and_provider(tmp_path: Path) -> None:
     assert vault.delete("user-a", "openrouter") is True
     assert vault.delete("user-a", "openrouter") is False
     assert vault.get("user-a", "openrouter") is None
-    assert vault.get("user-b", "openrouter")["api_key"] == "key-b"
+    user_b_credential = vault.get("user-b", "openrouter")
+    assert user_b_credential is not None
+    assert user_b_credential["api_key"] == "key-b"
 
 
 def test_vault_rejects_tampered_ciphertext(tmp_path: Path) -> None:
