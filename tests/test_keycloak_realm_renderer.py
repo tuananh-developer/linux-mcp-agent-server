@@ -37,9 +37,7 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
 
     realm = json.loads(output.read_text(encoding="utf-8"))
     assert realm["realm"] == "linux-agent"
-    assert realm["users"][0]["username"] == "first.operator"
-    assert realm["users"][0]["credentials"][0]["value"] == "a-strong-test-password"
-    assert realm["users"][0]["email"] == "operator@example.test"
+    assert "users" not in realm  # Bootstrap users are created through Keycloak's users API.
 
     clients = {client["clientId"]: client for client in realm["clients"]}
     assert clients["linux-mcp-resource-server"]["secret"] == "resource-secret-test"
