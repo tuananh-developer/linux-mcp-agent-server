@@ -15,6 +15,8 @@ const PROVIDER_LABELS = {
   anthropic: 'Anthropic Claude',
   ollama: 'Ollama',
 };
+const PROVIDERS = new Set(Object.keys(PROVIDER_DEFAULTS));
+const PROVIDER_CONFIG_STORAGE_KEY = 'linux-observatory:provider-config:v1';
 
 const MARKDOWN_TAGS = new Set([
   'a', 'blockquote', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -34,9 +36,78 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
   let ready = false;
   let epoch = 0;
   let usage = { input: 0, output: 0 };
-  // Secrets live only in this module's memory and are sent only to this same-origin gateway.
   let providerConfig = null;
   let providerKey = '';
+
+  function readSavedProviderConfig() {
+    try {
+      const raw = window.localStorage.getItem(PROVIDER_CONFIG_STORAGE_KEY);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      const valid = saved && saved.version === 1 &&
+        PROVIDERS.has(saved.provider) &&
+        typeof saved.model === 'string' && saved.model.trim().length > 0 &&
+        saved.model.length <= 128 &&
+        (saved.provider === 'ollama' ||
+          (typeof saved.api_key === 'string' && saved.api_key.length > 0 && saved.api_key.length <= 8192));
+      if (!valid) {
+        window.localStorage.removeItem(PROVIDER_CONFIG_STORAGE_KEY);
+        return null;
+      }
+      return saved;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveProviderConfig(config) {
+    if (!config || config.provider === 'ollama' ||
+        typeof config.api_key !== 'string' || !config.api_key ||
+        typeof config.model !== 'string' || !config.model.trim()) return false;
+    try {
+      window.localStorage.setItem(PROVIDER_CONFIG_STORAGE_KEY, JSON.stringify({
+        version: 1,
+        provider: config.provider,
+        model: config.model,
+        api_key: config.api_key,
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function removeSavedProviderConfig() {
+    try {
+      window.localStorage.removeItem(PROVIDER_CONFIG_STORAGE_KEY);
+    } catch {
+      // Storage may be disabled by browser policy.
+    }
+  }
+
+  function updateProviderPrivacyNote(remembered) {
+    $('agent-privacy-note').textContent = remembered
+      ? 'API key đã được lưu trong localStorage của trình duyệt này theo lựa chọn của bạn. Key không được gửi để lưu trên server, nhưng JavaScript cùng origin có thể đọc localStorage; chỉ bật trên thiết bị cá nhân đáng tin cậy. Bỏ chọn Ghi nhớ hoặc nhấn Xóa cấu hình để xóa key đã lưu.'
+      : 'API key mặc định chỉ được giữ trong bộ nhớ tab và gửi qua HTTPS tới gateway. Không lưu bền vững trên trình duyệt hoặc server. Chỉ gửi log khi bạn cấp quyền đọc log.';
+  }
+
+  function restoreRememberedProviderConfig() {
+    const saved = readSavedProviderConfig();
+    if (!saved || saved.provider === 'ollama') return false;
+    $('agent-provider').value = saved.provider;
+    $('agent-model').value = saved.model;
+    $('agent-api-key').value = saved.api_key;
+    $('agent-remember-key').checked = true;
+    providerKey = saved.api_key;
+    providerConfig = null;
+    ready = false;
+    $('provider-memory').textContent = 'Đã ghi nhớ trên trình duyệt này';
+    setProviderVisibility();
+    updateProviderPrivacyNote(true);
+    updateProviderFeedback('Đã khôi phục cấu hình đã ghi nhớ. Nhấn Kiểm tra kết nối để xác thực lại API key.', 'idle');
+    showModelState('unavailable', 'Đã khôi phục cấu hình · cần xác thực lại.');
+    return true;
+  }
 
   async function headers() {
     const token = await getAccessToken();
@@ -134,6 +205,7 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     const local = $('agent-provider').value === 'ollama';
     $('agent-api-key-field').hidden = local;
     $('agent-ollama-field').hidden = !local;
+    $('agent-remember-field').hidden = local;
   }
 
   function readProviderConfig() {
@@ -179,6 +251,9 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     if (providerConfig) {
       ready = true;
       showModelState('ready', PROVIDER_LABELS[providerConfig.provider] + ' · ' + providerConfig.model + ' · sẵn sàng');
+    } else if (providerKey && $('agent-remember-key').checked) {
+      ready = false;
+      showModelState('unavailable', 'Đã khôi phục cấu hình · nhấn Kiểm tra kết nối.');
     } else {
       ready = false;
       showModelState('unavailable', 'Chọn provider, nhập API key và kiểm tra kết nối.');
@@ -231,14 +306,29 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
 
       providerConfig = { ...draft };
       providerKey = draft.api_key;
-      $('agent-api-key').value = '';
       ready = true;
-      const keyNote = draft.provider === 'ollama'
-        ? 'Ollama local đã kết nối.'
-        : 'API key chỉ giữ trong bộ nhớ tab, không lưu bền vững.';
+      let keyNote;
+      if (draft.provider === 'ollama') {
+        keyNote = 'Ollama local đã kết nối.';
+      } else if ($('agent-remember-key').checked) {
+        if (saveProviderConfig(draft)) {
+          keyNote = 'API key đã được ghi nhớ trên trình duyệt này.';
+          $('provider-memory').textContent = 'Đã ghi nhớ trên trình duyệt này';
+          updateProviderPrivacyNote(true);
+        } else {
+          $('agent-remember-key').checked = false;
+          keyNote = 'Không thể lưu vào trình duyệt; API key chỉ giữ trong bộ nhớ tab.';
+          $('provider-memory').textContent = 'Chỉ lưu trong tab';
+          updateProviderPrivacyNote(false);
+        }
+      } else {
+        removeSavedProviderConfig();
+        keyNote = 'API key chỉ giữ trong bộ nhớ tab, không lưu bền vững.';
+        $('provider-memory').textContent = 'Không ghi nhớ key';
+        updateProviderPrivacyNote(false);
+      }
+      $('agent-api-key').value = '';
       updateProviderFeedback(data.message + ' ' + keyNote, 'success');
-      $('agent-privacy-note').textContent =
-        'Provider: ' + PROVIDER_LABELS[draft.provider] + '. Câu hỏi, lịch sử hội thoại và kết quả MCP được chuyển qua máy chủ Linux Observatory tới provider đã chọn. API key chỉ giữ trong bộ nhớ tab và dùng trong request tạm thời; không ghi vào file, database hay localStorage. Chỉ gửi log khi bạn cấp quyền đọc log. Phí API có thể phát sinh theo chính sách provider.';
       $('agent-log-label').textContent = 'Cho phép gửi log tới ' + PROVIDER_LABELS[draft.provider];
       showModelState('ready', PROVIDER_LABELS[draft.provider] + ' · ' + draft.model + ' · đã kết nối');
       return true;
@@ -294,6 +384,7 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     $('agent-provider').disabled = running;
     $('agent-model').disabled = running;
     $('agent-api-key').disabled = running;
+    $('agent-remember-key').disabled = running;
     $('agent-ollama-url').disabled = running;
     $('agent-provider-test').disabled = running;
     $('agent-provider-clear').disabled = running;
@@ -307,12 +398,23 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     usageLabel.textContent = '';
   }
 
-  function clearProvider() {
+  function clearProvider({ clearRemembered = false } = {}) {
     providerConfig = null;
     providerKey = '';
     $('agent-api-key').value = '';
     ready = false;
-    updateProviderFeedback('Đã xóa cấu hình trong bộ nhớ của tab. Nhập API key và kiểm tra lại khi cần.', 'idle');
+    if (clearRemembered) {
+      removeSavedProviderConfig();
+      $('agent-remember-key').checked = false;
+      $('provider-memory').textContent = 'Không ghi nhớ key';
+      updateProviderPrivacyNote(false);
+    }
+    updateProviderFeedback(
+      clearRemembered
+        ? 'Đã xóa cấu hình và API key đã ghi nhớ trên trình duyệt.'
+        : 'Đã xóa cấu hình đang hoạt động trong tab.',
+      'idle'
+    );
     showModelState('unavailable', 'Đã xóa cấu hình AI provider.');
   }
 
@@ -342,8 +444,24 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     showModelState('unavailable', 'Ollama URL đã thay đổi · cần kiểm tra lại.');
   });
   $('agent-provider-test').addEventListener('click', () => void testProvider());
-  $('agent-provider-clear').addEventListener('click', clearProvider);
+  $('agent-provider-clear').addEventListener('click', () => clearProvider({ clearRemembered: true }));
   $('agent-recheck').addEventListener('click', () => void testProvider());
+  $('agent-remember-key').addEventListener('change', () => {
+    if (!$('agent-remember-key').checked) {
+      removeSavedProviderConfig();
+      $('provider-memory').textContent = 'Không ghi nhớ key';
+      updateProviderPrivacyNote(false);
+      updateProviderFeedback('Đã tắt ghi nhớ và xóa API key đã lưu trên trình duyệt.', 'idle');
+      return;
+    }
+    if (providerConfig && providerConfig.provider !== 'ollama' && saveProviderConfig(providerConfig)) {
+      $('provider-memory').textContent = 'Đã ghi nhớ trên trình duyệt này';
+      updateProviderPrivacyNote(true);
+      updateProviderFeedback('API key đã được ghi nhớ trên trình duyệt này.', 'success');
+    } else {
+      updateProviderFeedback('API key sẽ chỉ được lưu sau khi kiểm tra kết nối thành công.', 'idle');
+    }
+  });
 
   $('chat-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -398,9 +516,12 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     input.value = '';
     consent.checked = false;
     showModelState('idle', 'Kết nối MCP để cấu hình AI.');
-    updateProviderFeedback('API key không được ghi vào localStorage, database hoặc file cấu hình.');
-    $('agent-privacy-note').textContent =
-      'Câu hỏi, lịch sử chat và kết quả MCP sẽ được gửi qua máy chủ Linux Observatory tới provider bạn chọn. API key chỉ được giữ trong bộ nhớ tab, không được lưu bền vững.';
+    if (!restoreRememberedProviderConfig()) {
+      $('agent-remember-key').checked = false;
+      $('provider-memory').textContent = 'Không ghi nhớ key';
+      updateProviderFeedback('API key mặc định chỉ giữ trong bộ nhớ tab. Bật Ghi nhớ nếu muốn dùng lại.', 'idle');
+      updateProviderPrivacyNote(false);
+    }
     $('agent-log-label').textContent = 'Cho phép AI phân tích log';
     setRunning(false);
   }
@@ -426,5 +547,6 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     });
   });
   setProviderVisibility();
+  restoreRememberedProviderConfig();
   return { reset, refreshStatus };
 }
