@@ -32,6 +32,10 @@ def main() -> int:
     username = required_env("INITIAL_ADMIN_USERNAME")
     password = required_env("INITIAL_ADMIN_PASSWORD")
     email = os.environ.get("INITIAL_ADMIN_EMAIL", "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", username):
+        raise SystemExit("INITIAL_ADMIN_USERNAME must be 3-64 letters, digits, dots, underscores or hyphens.")
+    if len(password) < 12:
+        raise SystemExit("INITIAL_ADMIN_PASSWORD must contain at least 12 characters.")
 
     for value in (mcp_domain, auth_domain):
         if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", value) or value.startswith(".") or value.endswith("."):
@@ -71,6 +75,8 @@ def main() -> int:
         return value
 
     realm = walk(realm)
+    if "CHANGE_ME_" in json.dumps(realm):
+        raise SystemExit("The rendered realm still contains an unreplaced secret placeholder.")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(
         prefix=f".{args.output.name}.", dir=args.output.parent
