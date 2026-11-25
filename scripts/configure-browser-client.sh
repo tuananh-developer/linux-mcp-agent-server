@@ -80,7 +80,12 @@ SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --forma
 for SCOPE_NAME in mcp.read mcp.logs.read; do
   SCOPE_ID=""
   while IFS=, read -r candidate_id candidate_name; do
-    candidate_name="${candidate_name%
+    if [[ "$candidate_name" == "$SCOPE_NAME" ]]; then
+      SCOPE_ID="$candidate_id"
+      break
+    fi
+  done <<< "$SCOPE_CATALOG"
+
   [[ -n "$SCOPE_ID" ]] || {
     echo "ERROR: Required Keycloak client scope '$SCOPE_NAME' is missing from realm '$REALM'." >&2
     exit 1
