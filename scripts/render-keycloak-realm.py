@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -34,10 +35,8 @@ def write_private_json(destination: Path, value: Any) -> None:
         os.replace(temporary_name, destination)
         os.chmod(destination, 0o600)
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(temporary_name)
-        except FileNotFoundError:
-            pass
 
 
 def main() -> int:
