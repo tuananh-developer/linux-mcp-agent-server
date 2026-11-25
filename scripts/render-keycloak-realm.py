@@ -29,32 +29,11 @@ def main() -> int:
     auth_domain = required_env("AUTH_DOMAIN")
     resource_secret = required_env("RESOURCE_SERVER_SECRET")
     agent_secret = required_env("AGENT_CLIENT_SECRET")
-    username = required_env("INITIAL_ADMIN_USERNAME")
-    password = required_env("INITIAL_ADMIN_PASSWORD")
-    email = os.environ.get("INITIAL_ADMIN_EMAIL", "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", username):
-        raise SystemExit("INITIAL_ADMIN_USERNAME must be 3-64 letters, digits, dots, underscores or hyphens.")
-    if len(password) < 12:
-        raise SystemExit("INITIAL_ADMIN_PASSWORD must contain at least 12 characters.")
-
     for value in (mcp_domain, auth_domain):
         if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", value) or value.startswith(".") or value.endswith("."):
             raise SystemExit("MCP_DOMAIN and AUTH_DOMAIN must be valid DNS hostnames.")
 
     realm: dict[str, Any] = json.loads(args.template.read_text(encoding="utf-8"))
-    realm["users"] = [
-        {
-            "username": username,
-            "enabled": True,
-            "email": email or None,
-            "emailVerified": bool(email),
-            "credentials": [
-                {"type": "password", "value": password, "temporary": False}
-            ],
-        }
-    ]
-    realm["users"][0] = {key: value for key, value in realm["users"][0].items() if value is not None}
-
     replacements = {
         "https://mcp.home.arpa": f"https://{mcp_domain}",
         "https://auth.home.arpa": f"https://{auth_domain}",
