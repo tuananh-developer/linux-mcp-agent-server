@@ -15,7 +15,7 @@ sudo install -d -o root -g linux-mcp-agent -m 0750 /etc/linux-mcp-agent
 sudo install -o root -g linux-mcp-agent -m 0640 deploy/systemd/server.env.example /etc/linux-mcp-agent/server.env
 sudo install -o root -g linux-mcp-agent -m 0640 config/log-sources.example.json /etc/linux-mcp-agent/log-sources.json
 sudo install -o root -g root -m 0644 deploy/systemd/linux-mcp-agent.service /etc/systemd/system/
-sudo bash scripts/init-provider-vault-key.sh
+sudo bash /opt/linux-mcp-agent-server/scripts/init-provider-vault-key.sh
 ```
 
 Edit `/etc/linux-mcp-agent/server.env`; set `AUTH_MODE=keycloak`, real issuer/resource values, and the introspection client secret. Keep the file mode at `0640` and never commit it.
