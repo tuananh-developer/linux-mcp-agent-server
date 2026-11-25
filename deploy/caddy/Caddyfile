@@ -2,7 +2,7 @@
     tls internal
     encode zstd gzip
 
-    @backend path /healthz /mcp /.well-known/oauth-protected-resource/mcp / /dashboard /assistant /dashboard/assets/* /agent/status /agent/chat /agent/test
+    @backend path /healthz /mcp /.well-known/oauth-protected-resource/mcp / /dashboard /assistant /dashboard/assets/* /agent/status /agent/credentials /agent/credentials/* /agent/chat /agent/test
     handle @backend {
         reverse_proxy {$MCP_UPSTREAM}
     }
