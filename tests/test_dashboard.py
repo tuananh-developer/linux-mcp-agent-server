@@ -53,6 +53,14 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assert 'id="chat-form"' in assistant.text
         assert 'id="login-keycloak"' in assistant.text
         assert 'id="bearer-token"' not in assistant.text
+        assert 'id="agent-remember-key"' in assistant.text
+        assert 'id="agent-remember-key" type="checkbox"' in assistant.text
+        agent_ui = await client.get("/dashboard/assets/agent-ui.js")
+        assert agent_ui.status_code == 200
+        assert "PROVIDER_CONFIG_STORAGE_KEY" in agent_ui.text
+        assert "window.localStorage.setItem" in agent_ui.text
+        assert "window.localStorage.removeItem" in agent_ui.text
+        assert "restoreRememberedProviderConfig" in agent_ui.text
         for removed_screen in ("view-overview", "view-processes", "view-logs", "view-explorer"):
             assert f'id="{removed_screen}"' not in page.text
         assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
