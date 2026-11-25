@@ -271,12 +271,13 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
     def provider_settings_for(request: Request, raw: object) -> ProviderSettings:
         if not isinstance(raw, dict):
             raise AgentError("Chưa có cấu hình nhà cung cấp AI.")
-        provider = raw.get("provider")
-        api_key = raw.get("api_key", "")
+        provider_config = cast(dict[str, Any], raw)
+        provider = provider_config.get("provider")
+        api_key = provider_config.get("api_key", "")
         if provider == "ollama" or (api_key is not None and not isinstance(api_key, str)):
-            return ProviderSettings.from_payload(raw)
+            return ProviderSettings.from_payload(provider_config)
         if isinstance(api_key, str) and api_key.strip():
-            return ProviderSettings.from_payload(raw)
+            return ProviderSettings.from_payload(provider_config)
         if not isinstance(provider, str) or provider not in PROVIDERS:
             raise AgentError("Nhà cung cấp AI không được hỗ trợ.")
         if credential_vault is None:
@@ -284,7 +285,7 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
         saved = credential_vault.get(subject_for(request), provider)
         if saved is None:
             raise AgentError("Chưa có API key đã lưu cho provider này. Hãy nhập API key và kiểm tra kết nối.")
-        resolved = dict(raw)
+        resolved: dict[str, Any] = dict(provider_config)
         resolved["api_key"] = saved["api_key"]
         if not resolved.get("model"):
             resolved["model"] = saved["model"]
@@ -336,6 +337,8 @@ def agent_routes(settings: Settings, mcp: MCPServer, security: TransportSecurity
             async with provider_limit:
                 result = await gateway.test_connection()
             if remember and result.get("available") is True:
+                if credential_vault is None:
+                    raise AgentError("Encrypted provider vault chưa được cấu hình.")
                 credential_vault.put(
                     subject, provider_settings.provider, provider_settings.model, provider_settings.api_key
                 )
