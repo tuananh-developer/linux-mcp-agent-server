@@ -60,6 +60,8 @@ class CredentialVault:
             metadata = key_file.lstat()
             if not stat.S_ISREG(metadata.st_mode):
                 raise CredentialVaultError("Provider vault key must be a regular file.")
+            if stat.S_IMODE(metadata.st_mode) & 0o077:
+                raise CredentialVaultError("Provider vault key permissions must be 0600 or stricter.")
             key = key_file.read_bytes()
         except OSError as exc:
             raise CredentialVaultError("Cannot read the provider vault key.") from exc
