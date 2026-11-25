@@ -49,8 +49,8 @@ if [[ -z "$CLIENT_UUID" ]]; then
     -s implicitFlowEnabled=false \
     -s directAccessGrantsEnabled=false \
     -s protocol=openid-connect \
-    -s "redirectUris=[\"$ORIGIN/*\"]" \
-    -s "webOrigins=[\"$ORIGIN\"]" \
+    -s "redirectUris=[\\"$ORIGIN/*\\"]" \
+    -s "webOrigins=[\\"$ORIGIN\\"]" \
     -s 'attributes."pkce.code.challenge.method"=S256'
   CLIENT_UUID="$("$KCADM" get clients -r "$REALM" -q "clientId=$CLIENT_ID" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
 fi
@@ -68,12 +68,17 @@ fi
   -s implicitFlowEnabled=false \
   -s directAccessGrantsEnabled=false \
   -s protocol=openid-connect \
-  -s "redirectUris=[\"$ORIGIN/*\"]" \
-  -s "webOrigins=[\"$ORIGIN\"]" \
+  -s "redirectUris=[\\"$ORIGIN/*\\"]" \
+  -s "webOrigins=[\\"$ORIGIN\\"]" \
   -s 'attributes."pkce.code.challenge.method"=S256' >/dev/null
 
+# The client-scopes collection does not filter by ?name=. Fetch the catalog
+# once and select the exact ID locally instead of accidentally using the last
+# scope in the realm.
+SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --format csv --noquotes)"
+
 for SCOPE_NAME in mcp.read mcp.logs.read; do
-  SCOPE_ID="$("$KCADM" get client-scopes -r "$REALM" -q "name=$SCOPE_NAME" --fields id --format csv --noquotes | tail -n 1 | tr -d '\r')"
+  SCOPE_ID="$(printf '%s\\n' "$SCOPE_CATALOG" | awk -F, -v wanted="$SCOPE_NAME" '$2 == wanted { print $1; exit }')"
   [[ -n "$SCOPE_ID" ]] || {
     echo "ERROR: Required Keycloak client scope '$SCOPE_NAME' is missing from realm '$REALM'." >&2
     exit 1
@@ -81,12 +86,30 @@ for SCOPE_NAME in mcp.read mcp.logs.read; do
 
   if [[ "$SCOPE_NAME" == "mcp.read" ]]; then
     RELATION=default-client-scopes
+    OPPOSITE_RELATION=optional-client-scopes
   else
     RELATION=optional-client-scopes
+    OPPOSITE_RELATION=default-client-scopes
   fi
-  if ! "$KCADM" get "clients/$CLIENT_UUID/$RELATION" -r "$REALM" | grep -Fq "$SCOPE_NAME"; then
-    "$KCADM" update "clients/$CLIENT_UUID/$RELATION/$SCOPE_ID" -r "$REALM" >/dev/null
+
+  # Keep each custom scope in exactly the intended attachment category.
+  OPPOSITE_SCOPES="$("$KCADM" get "clients/$CLIENT_UUID/$OPPOSITE_RELATION" -r "$REALM")"
+  if grep -Fq "$SCOPE_NAME" <<<"$OPPOSITE_SCOPES"; then
+    "$KCADM" delete "clients/$CLIENT_UUID/$OPPOSITE_RELATION/$SCOPE_ID" -r "$REALM"
   fi
+
+  CURRENT_SCOPES="$("$KCADM" get "clients/$CLIENT_UUID/$RELATION" -r "$REALM")"
+  if ! grep -Fq "$SCOPE_NAME" <<<"$CURRENT_SCOPES"; then
+    # This association endpoint supports PUT but not a GET on an individual
+    # association. -n tells kcadm to skip its default GET/merge preflight.
+    "$KCADM" update "clients/$CLIENT_UUID/$RELATION/$SCOPE_ID" -r "$REALM" -n >/dev/null
+  fi
+
+  VERIFIED_SCOPES="$("$KCADM" get "clients/$CLIENT_UUID/$RELATION" -r "$REALM")"
+  grep -Fq "$SCOPE_NAME" <<<"$VERIFIED_SCOPES" || {
+    echo "ERROR: Failed to attach '$SCOPE_NAME' to $CLIENT_ID/$RELATION." >&2
+    exit 1
+  }
 done
 
 MAPPERS="$("$KCADM" get "clients/$CLIENT_UUID/protocol-mappers/models" -r "$REALM")"
@@ -102,5 +125,5 @@ if ! grep -Fq 'mcp-resource-audience' <<<"$MAPPERS"; then
     -s 'config."introspection.token.claim"=true' >/dev/null
 fi
 
-printf 'Keycloak browser client ready: %s (Authorization Code + PKCE S256)\n' "$CLIENT_ID"
+printf 'Verified Keycloak browser client: %s (mcp.read default, mcp.logs.read optional, PKCE S256)\\n' "$CLIENT_ID"
 IN_CONTAINER
