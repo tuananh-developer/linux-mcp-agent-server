@@ -16,7 +16,7 @@ import stat
 import tempfile
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
@@ -75,7 +75,7 @@ class CredentialVault:
 
     @staticmethod
     def _validate_identity(subject: str, provider: str) -> None:
-        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+        if not 1 <= len(subject) <= 255:
             raise CredentialVaultError("A valid authenticated Keycloak subject is required.")
         if provider not in PROVIDERS:
             raise CredentialVaultError("Unsupported hosted AI provider.")
@@ -89,7 +89,7 @@ class CredentialVault:
         return f"linux-mcp-agent/provider-vault/v1/{subject}/{provider}/{model}".encode()
 
     @contextmanager
-    def _locked(self) -> Iterator[None]:
+    def _locked(self) -> Generator[None, None, None]:
         with self._thread_lock:
             try:
                 self.storage_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -167,9 +167,9 @@ class CredentialVault:
 
     def put(self, subject: str, provider: str, model: str, api_key: str) -> None:
         self._validate_identity(subject, provider)
-        if not isinstance(model, str) or not 1 <= len(model) <= 128:
+        if not 1 <= len(model) <= 128:
             raise CredentialVaultError("Invalid provider model.")
-        if not isinstance(api_key, str) or not 1 <= len(api_key) <= 1024:
+        if not 1 <= len(api_key) <= 1024:
             raise CredentialVaultError("Invalid provider API key.")
         nonce = secrets.token_bytes(12)
         ciphertext = self._aead.encrypt(
@@ -207,9 +207,9 @@ class CredentialVault:
                 raise CredentialVaultError("Stored provider credential has an invalid format.")
             try:
                 plaintext = self._aead.decrypt(
-                    base64.b64decode(entry["nonce"], validate=True),
-                    base64.b64decode(entry["ciphertext"], validate=True),
-                    self._aad(subject, provider, entry["model"]),
+                    base64.b64decode(cast(str, entry["nonce"]), validate=True),
+                    base64.b64decode(cast(str, entry["ciphertext"]), validate=True),
+                    self._aad(subject, provider, cast(str, entry["model"])),
                 )
                 secret = json.loads(plaintext)
             except (ValueError, InvalidTag) as exc:
@@ -219,7 +219,7 @@ class CredentialVault:
             return {"provider": provider, "model": entry["model"], "api_key": secret["api_key"]}
 
     def list_for_subject(self, subject: str) -> list[dict[str, str | int]]:
-        if not isinstance(subject, str) or not 1 <= len(subject) <= 255:
+        if not 1 <= len(subject) <= 255:
             raise CredentialVaultError("A valid authenticated Keycloak subject is required.")
         result: list[dict[str, str | int]] = []
         with self._locked():
