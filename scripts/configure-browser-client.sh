@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_ENV_FILE="$(printenv LINUX_MCP_COMPOSE_ENV_FILE || true)"
 [[ -n "$COMPOSE_ENV_FILE" ]] || COMPOSE_ENV_FILE="$ROOT/deploy/compose/.env"
 COMPOSE_FILE="$ROOT/deploy/compose/compose.yaml"
+MCP_DOMAIN="${MCP_DOMAIN:-mcp.home.arpa}"
+MCP_BROWSER_ORIGIN="${MCP_BROWSER_ORIGIN:-https://$MCP_DOMAIN}"
+MCP_RESOURCE_URI="${MCP_RESOURCE_URI:-$MCP_BROWSER_ORIGIN/mcp}"
 
 [[ -r "$COMPOSE_ENV_FILE" ]] || {
   echo "ERROR: Missing Compose env file: $COMPOSE_ENV_FILE" >&2
@@ -15,13 +18,16 @@ command -v docker >/dev/null 2>&1 || {
   exit 1
 }
 
-docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" exec -T keycloak /bin/bash -s <<'IN_CONTAINER'
+docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" exec -T \
+  -e MCP_BROWSER_ORIGIN="$MCP_BROWSER_ORIGIN" \
+  -e MCP_RESOURCE_URI="$MCP_RESOURCE_URI" \
+  keycloak /bin/bash -s <<'IN_CONTAINER'
 set -Eeuo pipefail
 
 KCADM=/opt/keycloak/bin/kcadm.sh
 REALM=linux-agent
 CLIENT_ID=linux-observatory-browser
-ORIGIN=https://mcp.home.arpa
+ORIGIN="$MCP_BROWSER_ORIGIN"
 ADMIN_USER="$(printenv KC_BOOTSTRAP_ADMIN_USERNAME || true)"
 ADMIN_PASSWORD="$(printenv KC_BOOTSTRAP_ADMIN_PASSWORD || true)"
 
