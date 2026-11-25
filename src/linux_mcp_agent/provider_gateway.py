@@ -134,7 +134,26 @@ class ProviderGateway:
                 408: "Nhà cung cấp xử lý quá thời gian.",
                 429: "Đã chạm giới hạn quota hoặc tốc độ API. Kiểm tra billing và thử lại.",
             }
-            raise AgentError(messages.get(exc.code, f"Nhà cung cấp AI trả về HTTP {exc.code}.")) from None
+            detail = ""
+            try:
+                error_body = json.loads(exc.read(16_384))
+                if isinstance(error_body, dict):
+                    provider_error = error_body.get("error")
+                    if isinstance(provider_error, dict):
+                        raw_detail = provider_error.get("message")
+                        if isinstance(raw_detail, str):
+                            detail = raw_detail
+                    elif isinstance(provider_error, str):
+                        detail = provider_error
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+            if self.settings.api_key and detail:
+                detail = detail.replace(self.settings.api_key, "[đã ẩn]")
+            detail = re.sub(r"\\s+", " ", detail).strip()[:500]
+            message = messages.get(exc.code, f"Nhà cung cấp AI trả về HTTP {exc.code}.")
+            if exc.code == 400 and detail:
+                message = f"{message} Chi tiết từ nhà cung cấp: {detail}"
+            raise AgentError(message) from None
         except (URLError, TimeoutError, OSError):
             raise AgentError("Không thể kết nối nhà cung cấp AI. Kiểm tra mạng và cấu hình.") from None
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -255,10 +274,16 @@ class ProviderGateway:
         payload: dict[str, Any] = {
             "model": self.settings.model,
             "messages": wire_messages,
-            ("max_tokens" if self.settings.provider == "openrouter" else "max_completion_tokens"): 1536,
-            "tool_choice": "auto",
-            "parallel_tool_calls": False,
+            "max_completion_tokens": 1536,
         }
+        if self.settings.provider == "openrouter":
+            # Only route to model providers that support every parameter in
+            # this request. The free router already filters for tool calling;
+            # require_parameters avoids endpoints silently rejecting options.
+            payload["provider"] = {"require_parameters": True}
+        else:
+            payload["tool_choice"] = "auto"
+            payload["parallel_tool_calls"] = False
         if tools:
             payload["tools"] = [
                 {"type": "function", "function": {
