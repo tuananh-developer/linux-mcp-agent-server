@@ -215,7 +215,7 @@ printf '\n== 2/3 Ensure MCP is healthy ==\n'
 ensure_mcp_running
 
 printf '\n== 3/3 Start Caddy with matching MCP upstream ==\n'
-MCP_UPSTREAM="127.0.0.1:$MCP_PORT" "${compose[@]}" --profile lan up -d caddy
+MCP_UPSTREAM="127.0.0.1:$MCP_PORT" "${compose[@]}" --profile lan up -d --force-recreate caddy
 verify_caddy_proxy "$MCP_DOMAIN"
 
 printf '\nDemo endpoints:\n'
