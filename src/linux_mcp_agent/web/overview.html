@@ -64,7 +64,7 @@
 <footer><span>Linux Observatory · MCP Streamable HTTP</span><span>Read-only host observations · Không thực thi shell từ trình duyệt</span></footer>
 </main>
 <dialog id="connection-dialog"><form id="connection-form"><div class="dialog-heading"><h2>Cấu hình kết nối MCP</h2><button id="close-dialog" type="button" class="close-button" aria-label="Đóng">×</button></div>
-<label for="endpoint-display">Endpoint</label><input id="endpoint-display" readonly><label for="bearer-token">Bearer token <span>(nếu bật Keycloak)</span></label><input id="bearer-token" type="password" autocomplete="off" placeholder="Dán access token">
-<p>Token chỉ được giữ trong bộ nhớ của tab và sẽ mất khi tải lại trang hoặc ngắt kết nối.</p><p id="connection-error" class="error-text" role="status"></p>
-<div class="dialog-actions"><button id="disconnect" type="button" class="button secondary">Ngắt kết nối</button><button type="submit" class="button primary">Kết nối</button></div></form></dialog>
+<label for="endpoint-display">Endpoint</label><input id="endpoint-display" readonly>
+<p>Đăng nhập bằng tài khoản Keycloak. Trình duyệt tự xin access token MCP và tự làm mới khi phiên đăng nhập còn hiệu lực.</p><p id="connection-error" class="error-text" role="status"></p>
+<div class="dialog-actions"><button id="disconnect" type="button" class="button secondary">Ngắt kết nối</button><button id="login-keycloak" type="button" class="button primary">Đăng nhập bằng Keycloak</button></div></form></dialog>
 </body></html>
