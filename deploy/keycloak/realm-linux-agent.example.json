@@ -99,6 +99,7 @@
         "pkce.code.challenge.method": "S256"
       },
       "defaultClientScopes": [
+        "basic",
         "mcp.read"
       ],
       "optionalClientScopes": [
