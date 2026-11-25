@@ -60,6 +60,9 @@ jobs:
       - name: Browser JavaScript syntax
         run: |
           node --check src/linux_mcp_agent/web/overview.js
+          node --check src/linux_mcp_agent/web/app.js
+          node --check src/linux_mcp_agent/web/agent-ui.js
+          node --check src/linux_mcp_agent/web/mcp-client.mjs
           node --check src/linux_mcp_agent/web/keycloak-auth.mjs
 
       - name: Browser MCP, auth and agent loop tests
