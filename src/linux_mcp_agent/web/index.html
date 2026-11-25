@@ -80,9 +80,9 @@
           <div class="provider-heading">
             <div>
               <h2 id="provider-title">Nhà cung cấp AI</h2>
-              <p>Chọn model và dùng API key của bạn. Câu hỏi cùng kết quả MCP sẽ được gửi tới provider đã chọn; log chỉ được gửi khi bạn bật quyền đọc log. API key chỉ giữ trong bộ nhớ tab, truyền qua HTTPS tới gateway và không được ghi vào file hoặc database.</p>
+              <p>Chọn model và dùng API key của bạn. Câu hỏi cùng kết quả MCP sẽ được gửi tới provider đã chọn; log chỉ được gửi khi bạn bật quyền đọc log. API key mặc định chỉ giữ trong bộ nhớ tab. Bạn có thể chủ động ghi nhớ key trên trình duyệt này nếu đang dùng thiết bị cá nhân đáng tin cậy.</p>
             </div>
-            <span class="provider-memory">Chỉ lưu trong tab hiện tại</span>
+            <span class="provider-memory" id="provider-memory">Không ghi nhớ key</span>
           </div>
           <div class="provider-grid">
             <div>
@@ -104,6 +104,13 @@
               <label for="agent-api-key">API key</label>
               <input id="agent-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Dán API key của provider đã chọn">
             </div>
+            <div id="agent-remember-field" class="provider-wide">
+              <label class="provider-remember-label" for="agent-remember-key">
+                <input id="agent-remember-key" type="checkbox" aria-describedby="agent-remember-help">
+                <span>Ghi nhớ API key trên trình duyệt này</span>
+              </label>
+              <p class="provider-help" id="agent-remember-help">Chỉ bật trên thiết bị cá nhân. Key sẽ được lưu trong localStorage và có thể được JavaScript cùng nguồn đọc; không được gửi lên server để lưu.</p>
+            </div>
             <div id="agent-ollama-field" class="provider-wide" hidden>
               <label for="agent-ollama-url">Ollama URL trên máy chủ</label>
               <input id="agent-ollama-url" value="http://127.0.0.1:11434" autocomplete="off" spellcheck="false">
@@ -111,7 +118,7 @@
             </div>
           </div>
           <div class="provider-actions">
-            <p id="agent-provider-feedback" role="status">API key không được ghi vào localStorage, database hoặc file cấu hình.</p>
+            <p id="agent-provider-feedback" role="status">API key mặc định chỉ giữ trong bộ nhớ tab. Bật Ghi nhớ nếu muốn dùng lại.</p>
             <div>
               <button class="button" id="agent-provider-clear" type="button">Xóa cấu hình</button>
               <button class="button primary" id="agent-provider-test" type="button">Kiểm tra kết nối</button>
@@ -168,7 +175,7 @@
             </div>
             <details class="privacy">
               <summary>Dữ liệu và quyền riêng tư</summary>
-              <p id="agent-privacy-note">Tùy cấu hình, dữ liệu hội thoại được xử lý qua OpenAI API hoặc Ollama trên máy.</p>
+              <p id="agent-privacy-note">API key mặc định chỉ được giữ trong bộ nhớ tab. Chỉ lưu trên trình duyệt nếu bạn bật tùy chọn Ghi nhớ.</p>
               <p id="log-help">Đổi quyền chia sẻ log sẽ bắt đầu lại hội thoại. Hội thoại chỉ lưu trong tab này.</p>
             </details>
           </div>
