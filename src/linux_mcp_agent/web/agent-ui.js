@@ -15,8 +15,7 @@ const PROVIDER_LABELS = {
   anthropic: 'Anthropic Claude',
   ollama: 'Ollama',
 };
-const PROVIDERS = new Set(Object.keys(PROVIDER_DEFAULTS));
-const PROVIDER_CONFIG_STORAGE_KEY = 'linux-observatory:provider-config:v1';
+let savedCredentials = new Map();
 
 const MARKDOWN_TAGS = new Set([
   'a', 'blockquote', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -39,74 +38,38 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
   let providerConfig = null;
   let providerKey = '';
 
-  function readSavedProviderConfig() {
-    try {
-      const raw = window.localStorage.getItem(PROVIDER_CONFIG_STORAGE_KEY);
-      if (!raw) return null;
-      const saved = JSON.parse(raw);
-      const valid = saved && saved.version === 1 &&
-        PROVIDERS.has(saved.provider) &&
-        typeof saved.model === 'string' && saved.model.trim().length > 0 &&
-        saved.model.length <= 128 &&
-        (saved.provider === 'ollama' ||
-          (typeof saved.api_key === 'string' && saved.api_key.length > 0 && saved.api_key.length <= 8192));
-      if (!valid) {
-        window.localStorage.removeItem(PROVIDER_CONFIG_STORAGE_KEY);
-        return null;
-      }
-      return saved;
-    } catch {
-      return null;
-    }
-  }
-
-  function saveProviderConfig(config) {
-    if (!config || config.provider === 'ollama' ||
-        typeof config.api_key !== 'string' || !config.api_key ||
-        typeof config.model !== 'string' || !config.model.trim()) return false;
-    try {
-      window.localStorage.setItem(PROVIDER_CONFIG_STORAGE_KEY, JSON.stringify({
-        version: 1,
-        provider: config.provider,
-        model: config.model,
-        api_key: config.api_key,
-      }));
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function removeSavedProviderConfig() {
-    try {
-      window.localStorage.removeItem(PROVIDER_CONFIG_STORAGE_KEY);
-    } catch {
-      // Storage may be disabled by browser policy.
-    }
-  }
-
   function updateProviderPrivacyNote(remembered) {
     $('agent-privacy-note').textContent = remembered
-      ? 'API key đã được lưu trong localStorage của trình duyệt này theo lựa chọn của bạn. Key không được gửi để lưu trên server, nhưng JavaScript cùng origin có thể đọc localStorage; chỉ bật trên thiết bị cá nhân đáng tin cậy. Bỏ chọn Ghi nhớ hoặc nhấn Xóa cấu hình để xóa key đã lưu.'
-      : 'API key mặc định chỉ được giữ trong bộ nhớ tab và gửi qua HTTPS tới gateway. Không lưu bền vững trên trình duyệt hoặc server. Chỉ gửi log khi bạn cấp quyền đọc log.';
+      ? 'API key được mã hóa AES-256-GCM và lưu trên MCP Server theo tài khoản Keycloak của bạn. Master key nằm riêng và được systemd cấp cho tiến trình; trình duyệt không nhận lại API key. Quyền truy cập vẫn phụ thuộc bảo mật của máy chủ và tài khoản quản trị.'
+      : 'API key chỉ giữ trong bộ nhớ tab và gửi qua HTTPS tới gateway. Bật tùy chọn lưu trên MCP Server để mã hóa và dùng lại trên các trình duyệt đã đăng nhập cùng tài khoản Keycloak. Chỉ gửi log khi bạn cấp quyền đọc log.';
   }
 
-  function restoreRememberedProviderConfig(providerFilter = '') {
-    const saved = readSavedProviderConfig();
-    if (!saved || saved.provider === 'ollama' || (providerFilter && saved.provider !== providerFilter)) return false;
-    $('agent-provider').value = saved.provider;
-    $('agent-model').value = saved.model;
-    $('agent-api-key').value = saved.api_key;
-    $('agent-remember-key').checked = true;
-    providerKey = saved.api_key;
-    providerConfig = null;
-    ready = false;
-    $('provider-memory').textContent = 'Đã ghi nhớ trên trình duyệt này';
-    setProviderVisibility();
-    updateProviderPrivacyNote(true);
-    updateProviderFeedback('Đã khôi phục cấu hình đã ghi nhớ. Nhấn Kiểm tra kết nối để xác thực lại API key.', 'idle');
-    showModelState('unavailable', 'Đã khôi phục cấu hình · cần xác thực lại.');
-    return true;
+  async function loadSavedCredentials() {
+    const response = await fetch('/agent/credentials', {
+      method: 'GET',
+      headers: await headers(),
+      cache: 'no-store',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Không thể đọc cấu hình credential đã lưu.');
+    const entries = Array.isArray(data.credentials) ? data.credentials : [];
+    savedCredentials = new Map(entries
+      .filter(item => item && typeof item.provider === 'string' &&
+        typeof item.model === 'string' && typeof item.updated_at === 'number')
+      .map(item => [item.provider, { model: item.model, updated_at: item.updated_at }]));
+    return savedCredentials;
+  }
+
+  async function deleteSavedCredential(provider) {
+    const response = await fetch('/agent/credentials/' + encodeURIComponent(provider), {
+      method: 'DELETE',
+      headers: await headers(),
+      cache: 'no-store',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Không thể xóa API key đã lưu.');
+    savedCredentials.delete(provider);
+    return data.deleted === true;
   }
 
   async function headers() {
@@ -242,25 +205,54 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     $('agent-provider-feedback').dataset.state = state;
   }
 
-  function refreshStatus() {
+  async function refreshStatus() {
     if (!connected()) {
       ready = false;
       showModelState('idle', 'Kết nối MCP để cấu hình AI.');
       return;
     }
+    try {
+      await loadSavedCredentials();
+      const currentProvider = $('agent-provider').value;
+      let saved = savedCredentials.get(currentProvider);
+      if (!saved && savedCredentials.size) {
+        const first = savedCredentials.entries().next().value;
+        if (first) {
+          $('agent-provider').value = first[0];
+          saved = first[1];
+        }
+      }
+      if (saved) {
+        const provider = $('agent-provider').value;
+        $('agent-model').value = saved.model;
+        $('agent-api-key').value = '';
+        $('agent-api-key').placeholder = 'Đã lưu trên MCP Server. Để trống để dùng key đã lưu; nhập key mới để thay.';
+        $('agent-remember-key').checked = true;
+        $('provider-memory').textContent = 'API key đã mã hóa trên MCP Server';
+        setProviderVisibility();
+        updateProviderPrivacyNote(true);
+        providerConfig = null;
+        providerKey = '';
+        updateProviderFeedback('Đã tìm thấy API key đã lưu cho ' + PROVIDER_LABELS[provider] + '. Đang xác thực lại…', 'checking');
+        await testProvider({ skipRefresh: true });
+        return;
+      }
+    } catch (error) {
+      savedCredentials = new Map();
+      updateProviderPrivacyNote(false);
+      updateProviderFeedback('Không tải được credential từ MCP Server: ' + (error.message || 'lỗi không xác định'), 'error');
+    }
     if (providerConfig) {
       ready = true;
       showModelState('ready', PROVIDER_LABELS[providerConfig.provider] + ' · ' + providerConfig.model + ' · sẵn sàng');
-    } else if (providerKey && $('agent-remember-key').checked) {
-      ready = false;
-      showModelState('unavailable', 'Đã khôi phục cấu hình · nhấn Kiểm tra kết nối.');
     } else {
       ready = false;
+      $('provider-memory').textContent = 'Chưa lưu API key trên MCP Server';
       showModelState('unavailable', 'Chọn provider, nhập API key và kiểm tra kết nối.');
     }
   }
 
-  async function testProvider() {
+  async function testProvider({ skipRefresh = false } = {}) {
     if (!connected()) {
       toast('Kết nối MCP trước khi kiểm tra AI provider.');
       return false;
@@ -270,12 +262,6 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
       updateProviderFeedback('Hãy nhập Model ID.', 'error');
       return false;
     }
-    if (draft.provider !== 'ollama' && !draft.api_key) {
-      updateProviderFeedback('Hãy nhập API key cho provider đã chọn.', 'error');
-      $('agent-api-key').focus();
-      return false;
-    }
-
     const button = $('agent-provider-test');
     button.disabled = true;
     $('agent-recheck').disabled = true;
@@ -285,7 +271,7 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
       const response = await fetch('/agent/test', {
         method: 'POST',
         headers: await headers(),
-        body: JSON.stringify({ provider_config: draft }),
+        body: JSON.stringify({ provider_config: draft, remember: $('agent-remember-key').checked }),
         cache: 'no-store',
         signal: AbortSignal.timeout(20000),
       });
@@ -304,30 +290,33 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
         return false;
       }
 
-      providerConfig = { ...draft };
-      providerKey = draft.api_key;
+      const credentialSaved = data.credential_saved === true;
+      providerConfig = credentialSaved
+        ? { provider: draft.provider, model: draft.model }
+        : { ...draft };
+      providerKey = credentialSaved ? '' : draft.api_key;
       ready = true;
       let keyNote;
       if (draft.provider === 'ollama') {
         keyNote = 'Ollama local đã kết nối.';
-      } else if ($('agent-remember-key').checked) {
-        if (saveProviderConfig(draft)) {
-          keyNote = 'API key đã được ghi nhớ trên trình duyệt này.';
-          $('provider-memory').textContent = 'Đã ghi nhớ trên trình duyệt này';
-          updateProviderPrivacyNote(true);
-        } else {
-          $('agent-remember-key').checked = false;
-          keyNote = 'Không thể lưu vào trình duyệt; API key chỉ giữ trong bộ nhớ tab.';
-          $('provider-memory').textContent = 'Chỉ lưu trong tab';
-          updateProviderPrivacyNote(false);
-        }
+      } else if (credentialSaved) {
+        savedCredentials.set(draft.provider, { model: draft.model, updated_at: Date.now() });
+        keyNote = 'API key đã được mã hóa và lưu trên MCP Server theo tài khoản Keycloak của bạn.';
+        $('provider-memory').textContent = 'API key đã mã hóa trên MCP Server';
+        updateProviderPrivacyNote(true);
+      } else if (savedCredentials.has(draft.provider) && !draft.api_key) {
+        keyNote = 'Đã dùng API key đã mã hóa trên MCP Server.';
+        $('provider-memory').textContent = 'API key đã mã hóa trên MCP Server';
+        updateProviderPrivacyNote(true);
       } else {
-        removeSavedProviderConfig();
-        keyNote = 'API key chỉ giữ trong bộ nhớ tab, không lưu bền vững.';
-        $('provider-memory').textContent = 'Không ghi nhớ key';
+        keyNote = 'API key chỉ giữ trong bộ nhớ tab; chưa lưu trên MCP Server.';
+        $('provider-memory').textContent = 'Chỉ lưu trong bộ nhớ tab';
         updateProviderPrivacyNote(false);
       }
       $('agent-api-key').value = '';
+      $('agent-api-key').placeholder = savedCredentials.has(draft.provider)
+        ? 'Đã lưu trên MCP Server. Để trống để dùng key đã lưu; nhập key mới để thay.'
+        : 'Dán API key của provider đã chọn';
       updateProviderFeedback(data.message + ' ' + keyNote, 'success');
       $('agent-log-label').textContent = 'Cho phép gửi log tới ' + PROVIDER_LABELS[draft.provider];
       showModelState('ready', PROVIDER_LABELS[draft.provider] + ' · ' + draft.model + ' · đã kết nối');
@@ -344,7 +333,7 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     } finally {
       button.disabled = false;
       $('agent-recheck').disabled = false;
-      if (!providerConfig) refreshStatus();
+      if (!providerConfig && !skipRefresh) void refreshStatus();
     }
   }
 
@@ -398,20 +387,28 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     usageLabel.textContent = '';
   }
 
-  function clearProvider({ clearRemembered = false } = {}) {
+  async function clearProvider({ clearSaved = false } = {}) {
+    const provider = $('agent-provider').value;
     providerConfig = null;
     providerKey = '';
     $('agent-api-key').value = '';
     ready = false;
-    if (clearRemembered) {
-      removeSavedProviderConfig();
+    if (clearSaved && savedCredentials.has(provider)) {
+      try {
+        await deleteSavedCredential(provider);
+      } catch (error) {
+        updateProviderFeedback(error.message || 'Không thể xóa credential trên MCP Server.', 'error');
+        return;
+      }
+    }
+    if (clearSaved) {
       $('agent-remember-key').checked = false;
-      $('provider-memory').textContent = 'Không ghi nhớ key';
+      $('provider-memory').textContent = 'Đã xóa cấu hình provider';
       updateProviderPrivacyNote(false);
     }
     updateProviderFeedback(
-      clearRemembered
-        ? 'Đã xóa cấu hình và API key đã ghi nhớ trên trình duyệt.'
+      clearSaved
+        ? 'Đã xóa cấu hình và API key đã lưu trên MCP Server cho provider này.'
         : 'Đã xóa cấu hình đang hoạt động trong tab.',
       'idle'
     );
@@ -419,18 +416,26 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
   }
 
   $('agent-provider').addEventListener('change', () => {
-    clearProvider();
+    providerConfig = null;
+    providerKey = '';
+    ready = false;
     const provider = $('agent-provider').value;
-    $('agent-model').value = PROVIDER_DEFAULTS[provider];
+    const saved = savedCredentials.get(provider);
+    $('agent-model').value = saved?.model || PROVIDER_DEFAULTS[provider];
+    $('agent-api-key').value = '';
+    $('agent-api-key').placeholder = saved
+      ? 'Đã lưu trên MCP Server. Để trống để dùng key đã lưu; nhập key mới để thay.'
+      : 'Dán API key của provider đã chọn';
+    $('agent-remember-key').checked = Boolean(saved);
+    $('provider-memory').textContent = saved ? 'API key đã mã hóa trên MCP Server' : 'Chưa lưu API key trên MCP Server';
     $('agent-ollama-url').value = 'http://127.0.0.1:11434';
     setProviderVisibility();
     populateModels([]);
-    if (!restoreRememberedProviderConfig(provider)) {
-      $('provider-memory').textContent = $('agent-remember-key').checked
-        ? 'Ghi nhớ sau khi xác thực'
-        : 'Không ghi nhớ key';
-      updateProviderFeedback('Đã chọn ' + PROVIDER_LABELS[provider] + '. Nhập Model ID và API key để kiểm tra.');
-    }
+    updateProviderPrivacyNote(Boolean(saved));
+    updateProviderFeedback(saved
+      ? 'Đã tìm thấy API key đã mã hóa trên MCP Server. Nhấn Kiểm tra kết nối để xác thực.'
+      : 'Đã chọn ' + PROVIDER_LABELS[provider] + '. Nhập Model ID và API key để kiểm tra.');
+    showModelState('unavailable', saved ? 'Đã có API key lưu trên MCP Server · cần xác thực.' : 'Cần cấu hình AI provider.');
   });
   $('agent-model').addEventListener('input', () => {
     providerConfig = null;
@@ -449,22 +454,32 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     showModelState('unavailable', 'Ollama URL đã thay đổi · cần kiểm tra lại.');
   });
   $('agent-provider-test').addEventListener('click', () => void testProvider());
-  $('agent-provider-clear').addEventListener('click', () => clearProvider({ clearRemembered: true }));
+  $('agent-provider-clear').addEventListener('click', () => void clearProvider({ clearSaved: true }));
   $('agent-recheck').addEventListener('click', () => void testProvider());
   $('agent-remember-key').addEventListener('change', () => {
+    const provider = $('agent-provider').value;
     if (!$('agent-remember-key').checked) {
-      removeSavedProviderConfig();
-      $('provider-memory').textContent = 'Không ghi nhớ key';
-      updateProviderPrivacyNote(false);
-      updateProviderFeedback('Đã tắt ghi nhớ và xóa API key đã lưu trên trình duyệt.', 'idle');
+      void (async () => {
+        try {
+          if (savedCredentials.has(provider)) await deleteSavedCredential(provider);
+          if (!providerConfig?.api_key) providerConfig = null;
+          providerKey = providerConfig?.api_key || '';
+          ready = Boolean(providerConfig);
+          $('provider-memory').textContent = 'Không lưu API key trên MCP Server';
+          updateProviderPrivacyNote(false);
+          updateProviderFeedback('Đã tắt lưu bền vững và xóa API key đã lưu trên MCP Server. Key mới chỉ giữ trong bộ nhớ tab.', 'idle');
+          showModelState(ready ? 'ready' : 'unavailable', ready ? 'Provider đang dùng key trong bộ nhớ tab.' : 'Cần nhập API key để tiếp tục.');
+        } catch (error) {
+          $('agent-remember-key').checked = true;
+          updateProviderFeedback(error.message || 'Không thể xóa API key đã lưu.', 'error');
+        }
+      })();
       return;
     }
-    if (providerConfig && providerConfig.provider !== 'ollama' && saveProviderConfig(providerConfig)) {
-      $('provider-memory').textContent = 'Đã ghi nhớ trên trình duyệt này';
-      updateProviderPrivacyNote(true);
-      updateProviderFeedback('API key đã được ghi nhớ trên trình duyệt này.', 'success');
+    if (providerConfig?.api_key) {
+      void testProvider();
     } else {
-      updateProviderFeedback('API key sẽ chỉ được lưu sau khi kiểm tra kết nối thành công.', 'idle');
+      updateProviderFeedback('API key sẽ được mã hóa và lưu trên MCP Server sau khi kiểm tra kết nối thành công.', 'idle');
     }
   });
 
@@ -521,12 +536,10 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     input.value = '';
     consent.checked = false;
     showModelState('idle', 'Kết nối MCP để cấu hình AI.');
-    if (!restoreRememberedProviderConfig()) {
-      $('agent-remember-key').checked = false;
-      $('provider-memory').textContent = 'Không ghi nhớ key';
-      updateProviderFeedback('API key mặc định chỉ giữ trong bộ nhớ tab. Bật Ghi nhớ nếu muốn dùng lại.', 'idle');
-      updateProviderPrivacyNote(false);
-    }
+    $('agent-remember-key').checked = false;
+    $('provider-memory').textContent = 'Chưa tải credential từ MCP Server';
+    updateProviderFeedback('Kết nối MCP để tải credential đã lưu cho tài khoản Keycloak.', 'idle');
+    updateProviderPrivacyNote(false);
     $('agent-log-label').textContent = 'Cho phép AI phân tích log';
     setRunning(false);
   }
@@ -552,6 +565,5 @@ export function mountAgent({ client, tools, connected, toast, getAccessToken }) 
     });
   });
   setProviderVisibility();
-  restoreRememberedProviderConfig();
   return { reset, refreshStatus };
 }
