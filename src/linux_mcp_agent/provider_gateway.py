@@ -48,6 +48,10 @@ class ProviderSettings:
         if not isinstance(api_key, str) or len(api_key) > 1024 or any(ord(ch) < 32 for ch in api_key):
             raise AgentError("API key không hợp lệ.")
         api_key = api_key.strip()
+        if provider != "ollama" and api_key and (
+            not api_key.isascii() or any(ch.isspace() for ch in api_key)
+        ):
+            raise AgentError("API key phải là token ASCII không chứa khoảng trắng. Chỉ dán nội dung API key.")
         if provider != "ollama" and not api_key:
             raise AgentError("Nhà cung cấp này yêu cầu API key.")
         base_url = raw.get("base_url", "http://127.0.0.1:11434")
