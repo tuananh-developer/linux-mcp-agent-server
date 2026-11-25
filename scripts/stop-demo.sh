@@ -17,8 +17,10 @@ add_candidate() {
 }
 
 is_this_demo_process() {
-  local pid="$1" command_line process_root
+  local pid="$1" process_name command_line process_root
   [[ -r "/proc/$pid/cmdline" && -r "/proc/$pid/cwd" ]] || return 1
+  process_name="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
+  [[ "$process_name" =~ ^python([0-9]+(\\.[0-9]+)*)?$ ]] || return 1
   command_line="$(ps -p "$pid" -o args= 2>/dev/null || true)"
   [[ "$command_line" == *"-m linux_mcp_agent"* ]] || return 1
   process_root="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
@@ -50,7 +52,7 @@ while IFS= read -r pid; do
   if is_this_demo_process "$pid"; then
     add_candidate "$pid"
   fi
-done < <(pgrep -u "$CURRENT_UID" -f '[p]ython.*-m linux_mcp_agent' || true)
+done < <(ps -u "$CURRENT_UID" -o pid=,comm=)
 
 if (( ${#CANDIDATE_PIDS[@]} == 0 )); then
   if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet linux-mcp-agent.service; then
