@@ -186,14 +186,12 @@
       </div>
       <label for="endpoint-display">Endpoint</label>
       <input id="endpoint-display" readonly>
-      <label for="bearer-token">Bearer token <span class="muted">(nếu bật Keycloak)</span></label>
-      <input id="bearer-token" type="password" autocomplete="off" aria-describedby="token-note connection-error" placeholder="Dán access token của bạn">
-      <p id="token-note">Token chỉ giữ trong bộ nhớ của tab và sẽ mất khi tải lại trang.</p>
+      <p id="token-note">Đăng nhập bằng tài khoản Keycloak. Trình duyệt tự xin token MCP, giữ token trong bộ nhớ và tự làm mới khi phiên đăng nhập còn hiệu lực.</p>
       <p id="connection-error" class="dialog-error" role="status"></p>
       <div class="dialog-actions">
         <button class="button disconnect" id="disconnect" type="button">Ngắt kết nối</button>
         <button class="button" id="reconnect" type="button">Kết nối lại</button>
-        <button class="button primary" id="connect-submit" type="submit">Kết nối</button>
+        <button class="button primary" id="login-keycloak" type="button">Đăng nhập bằng Keycloak</button>
       </div>
     </form>
   </dialog>
