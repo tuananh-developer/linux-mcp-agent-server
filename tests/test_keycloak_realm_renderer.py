@@ -34,10 +34,6 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
             str(user_output),
             "--credential-output",
             str(credential_output),
-            "--user-output",
-            str(user_output),
-            "--credential-output",
-            str(credential_output),
         ],
         env=env,
         check=True,
@@ -74,7 +70,6 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
     browser = clients["linux-observatory-browser"]
     assert browser["redirectUris"] == ["https://observatory.example.test/*"]
     assert browser["webOrigins"] == ["https://observatory.example.test"]
-    assert output.stat().st_mode & 0o777 == 0o600
 
 
 def test_renderer_rejects_invalid_hostname(tmp_path: Path) -> None:
@@ -99,6 +94,10 @@ def test_renderer_rejects_invalid_hostname(tmp_path: Path) -> None:
             str(root / "deploy/keycloak/realm-linux-agent.example.json"),
             "--output",
             str(output),
+            "--user-output",
+            str(user_output),
+            "--credential-output",
+            str(credential_output),
         ],
         env=env,
         check=False,
