@@ -6,8 +6,8 @@ Keycloak 26.8.1 is the Authorization Server. The MCP process is only a resource 
 
 A pre-configured realm template is provided at `deploy/keycloak/realm-linux-agent.example.json` containing:
 - Realm `linux-agent` (`sslRequired: external`, 300s access token lifespan).
-- Client scopes `mcp.read` and `mcp.logs.read` (`include.in.token.scope=true`).
-- Public browser client `linux-observatory-browser` with the built-in `basic` and project `mcp.read` scopes as defaults. In Keycloak 26.8.1, the built-in `basic` scope contains the Subject (`sub`) mapper required to partition saved provider credentials by signed-in user.
+- Client scopes `basic`, `mcp.read` and `mcp.logs.read` (`include.in.token.scope=true`). The project explicitly defines `basic` with Keycloak's Subject (`sub`) mapper because custom realm imports are not guaranteed to provision the built-in scope.
+- Public browser client `linux-observatory-browser` with `basic` and project `mcp.read` scopes as defaults. The `basic` mapper adds `sub` to access tokens and token-introspection responses so saved provider credentials are partitioned by signed-in user.
 - Confidential introspection client `linux-mcp-resource-server` with `resource_url=https://mcp.home.arpa/mcp`.
 - Confidential machine client `linux-mcp-agent-client` with service account enabled and an audience mapper binding `https://mcp.home.arpa/mcp` into both the access token and token introspection response.
 
