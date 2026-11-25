@@ -312,6 +312,8 @@ def test_keycloak_realm_template_has_expected_clients_scopes_and_placeholders() 
     )
     assert str(clients["linux-mcp-resource-server"]["secret"]).startswith("CHANGE_ME_")
     assert str(clients["linux-mcp-agent-client"]["secret"]).startswith("CHANGE_ME_")
+    browser_scopes = set(clients["linux-observatory-browser"]["defaultClientScopes"])
+    assert {"basic", "mcp.read"} <= browser_scopes
 
 
 @pytest.mark.parametrize("claim", ["exp", "nbf"])
