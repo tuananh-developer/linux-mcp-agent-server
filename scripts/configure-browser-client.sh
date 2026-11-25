@@ -83,7 +83,7 @@ fi
 # scope in the realm.
 SCOPE_CATALOG="$("$KCADM" get client-scopes -r "$REALM" --fields id,name --format csv --noquotes)"
 
-for SCOPE_NAME in mcp.read mcp.logs.read; do
+for SCOPE_NAME in basic mcp.read mcp.logs.read; do
   SCOPE_ID=""
   while IFS=, read -r candidate_id candidate_name; do
     if [[ "$candidate_name" == "$SCOPE_NAME" ]]; then
@@ -97,12 +97,12 @@ for SCOPE_NAME in mcp.read mcp.logs.read; do
     exit 1
   }
 
-  if [[ "$SCOPE_NAME" == "mcp.read" ]]; then
-    RELATION=default-client-scopes
-    OPPOSITE_RELATION=optional-client-scopes
-  else
+  if [[ "$SCOPE_NAME" == "mcp.logs.read" ]]; then
     RELATION=optional-client-scopes
     OPPOSITE_RELATION=default-client-scopes
+  else
+    RELATION=default-client-scopes
+    OPPOSITE_RELATION=optional-client-scopes
   fi
 
   # Keep each custom scope in exactly the intended attachment category.
@@ -138,5 +138,5 @@ if ! grep -Fq 'mcp-resource-audience' <<<"$MAPPERS"; then
     -s 'config."introspection.token.claim"=true' >/dev/null
 fi
 
-printf 'Verified Keycloak browser client: %s (mcp.read default, mcp.logs.read optional, PKCE S256)\n' "$CLIENT_ID"
+printf 'Verified Keycloak browser client: %s (basic + mcp.read default, mcp.logs.read optional, PKCE S256)\n' "$CLIENT_ID"
 IN_CONTAINER
