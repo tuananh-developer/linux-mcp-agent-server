@@ -10,6 +10,8 @@ from pathlib import Path
 def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     output = tmp_path / "linux-agent-realm.json"
+    user_output = tmp_path / "operator.json"
+    credential_output = tmp_path / "operator-password.json"
     env = {
         **os.environ,
         "MCP_DOMAIN": "observatory.example.test",
@@ -28,6 +30,14 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
             str(root / "deploy/keycloak/realm-linux-agent.example.json"),
             "--output",
             str(output),
+            "--user-output",
+            str(user_output),
+            "--credential-output",
+            str(credential_output),
+            "--user-output",
+            str(user_output),
+            "--credential-output",
+            str(credential_output),
         ],
         env=env,
         check=True,
@@ -37,7 +47,23 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
 
     realm = json.loads(output.read_text(encoding="utf-8"))
     assert realm["realm"] == "linux-agent"
-    assert "users" not in realm  # Bootstrap users are created through Keycloak's users API.
+    user = json.loads(user_output.read_text(encoding="utf-8"))
+    credential = json.loads(credential_output.read_text(encoding="utf-8"))
+    assert user == {
+        "username": "first.operator",
+        "enabled": True,
+        "email": "operator@example.test",
+        "emailVerified": True,
+    }
+    assert credential == {
+        "type": "password",
+        "value": "a-strong-test-password",
+        "temporary": False,
+    }
+    assert "users" not in realm
+    assert output.stat().st_mode & 0o777 == 0o600
+    assert user_output.stat().st_mode & 0o777 == 0o600
+    assert credential_output.stat().st_mode & 0o777 == 0o600
 
     clients = {client["clientId"]: client for client in realm["clients"]}
     assert clients["linux-mcp-resource-server"]["secret"] == "resource-secret-test"
@@ -54,6 +80,8 @@ def test_renderer_injects_domain_secrets_and_initial_user(tmp_path: Path) -> Non
 def test_renderer_rejects_invalid_hostname(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     output = tmp_path / "realm.json"
+    user_output = tmp_path / "user.json"
+    credential_output = tmp_path / "credential.json"
     env = {
         **os.environ,
         "MCP_DOMAIN": "https://unsafe.example",
