@@ -213,7 +213,7 @@ class CredentialVault:
                     self._aad(subject, provider, entry["model"]),
                 )
                 secret = json.loads(plaintext)
-            except (ValueError, InvalidTag, json.JSONDecodeError) as exc:
+            except (ValueError, InvalidTag) as exc:
                 raise CredentialVaultError("Cannot decrypt the stored provider credential.") from exc
             if not isinstance(secret, dict) or not isinstance(secret.get("api_key"), str):
                 raise CredentialVaultError("Stored provider credential is invalid.")
