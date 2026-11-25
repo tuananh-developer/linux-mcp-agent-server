@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import pytest
 
 from linux_mcp_agent.credential_vault import CredentialVault, CredentialVaultError
 
 
-def test_vault_encrypts_and_isolates_credentials_by_subject(tmp_path) -> None:
+def test_vault_encrypts_and_isolates_credentials_by_subject(tmp_path: Path) -> None:
     key = os.urandom(32)
     store_path = tmp_path / "state" / "provider-credentials.json"
     vault = CredentialVault(store_path, key)
@@ -36,7 +37,7 @@ def test_vault_encrypts_and_isolates_credentials_by_subject(tmp_path) -> None:
     assert vault.list_for_subject("keycloak-user-b") == []
 
 
-def test_vault_delete_is_scoped_to_subject_and_provider(tmp_path) -> None:
+def test_vault_delete_is_scoped_to_subject_and_provider(tmp_path: Path) -> None:
     vault = CredentialVault(tmp_path / "provider-credentials.json", os.urandom(32))
     vault.put("user-a", "openrouter", "openrouter/free", "key-a")
     vault.put("user-b", "openrouter", "openrouter/free", "key-b")
@@ -47,7 +48,7 @@ def test_vault_delete_is_scoped_to_subject_and_provider(tmp_path) -> None:
     assert vault.get("user-b", "openrouter")["api_key"] == "key-b"
 
 
-def test_vault_rejects_tampered_ciphertext(tmp_path) -> None:
+def test_vault_rejects_tampered_ciphertext(tmp_path: Path) -> None:
     vault = CredentialVault(tmp_path / "provider-credentials.json", os.urandom(32))
     vault.put("user-a", "openrouter", "openrouter/free", "key-a")
 
@@ -60,7 +61,7 @@ def test_vault_rejects_tampered_ciphertext(tmp_path) -> None:
         vault.get("user-a", "openrouter")
 
 
-def test_vault_rejects_wrong_key_and_invalid_identity(tmp_path) -> None:
+def test_vault_rejects_wrong_key_and_invalid_identity(tmp_path: Path) -> None:
     store_path = tmp_path / "provider-credentials.json"
     CredentialVault(store_path, os.urandom(32)).put("user-a", "openrouter", "openrouter/free", "key-a")
     other_vault = CredentialVault(store_path, os.urandom(32))
@@ -73,9 +74,10 @@ def test_vault_rejects_wrong_key_and_invalid_identity(tmp_path) -> None:
         other_vault.get("user-a", "ollama")
 
 
-def test_vault_from_environment_requires_a_32_byte_key(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vault_from_environment_requires_a_32_byte_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     key_file = tmp_path / "provider-vault.key"
     key_file.write_bytes(b"short")
+    key_file.chmod(0o600)
     monkeypatch.setenv("PROVIDER_VAULT_KEY_FILE", str(key_file))
     monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
 
