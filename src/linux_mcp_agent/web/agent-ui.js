@@ -13,7 +13,7 @@ const PROVIDER_LABELS = {
   ollama: 'Ollama',
 };
 
-export function mountAgent({ client, tools, connected, toast }) {
+export function mountAgent({ client, tools, connected, toast, getAccessToken }) {
   const $ = id => document.getElementById(id);
   const input = $('chat-input');
   const transcript = $('chat-messages');
@@ -29,10 +29,12 @@ export function mountAgent({ client, tools, connected, toast }) {
   let providerConfig = null;
   let providerKey = '';
 
-  function headers() {
+  async function headers() {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Phiên Keycloak đã hết hạn. Hãy đăng nhập lại bằng Keycloak.');
     return {
       'Content-Type': 'application/json',
-      ...(client.token ? { Authorization: 'Bearer ' + client.token } : {}),
+      Authorization: 'Bearer ' + token,
     };
   }
 
@@ -153,7 +155,7 @@ export function mountAgent({ client, tools, connected, toast }) {
     try {
       const response = await fetch('/agent/test', {
         method: 'POST',
-        headers: headers(),
+        headers: await headers(),
         body: JSON.stringify({ provider_config: draft }),
         cache: 'no-store',
         signal: AbortSignal.timeout(20000),
@@ -212,7 +214,7 @@ export function mountAgent({ client, tools, connected, toast }) {
         if (!providerConfig) throw new Error('Hãy cấu hình và kiểm tra AI provider trước.');
         const response = await fetch('/agent/chat', {
           method: 'POST',
-          headers: headers(),
+          headers: await headers(),
           body: JSON.stringify({ messages, allow_logs: allowLogs, provider_config: providerConfig }),
           signal: AbortSignal.any([signal, AbortSignal.timeout(125000)]),
         });
