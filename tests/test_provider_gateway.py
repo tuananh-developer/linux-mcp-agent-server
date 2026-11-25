@@ -121,6 +121,26 @@ async def test_openai_chat_normalizes_function_calls(monkeypatch: pytest.MonkeyP
     assert "dummy-key" not in str(result)
 
 
+@pytest.mark.asyncio
+async def test_openrouter_free_router_is_available_even_when_not_in_model_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = ProviderSettings.from_payload({
+        "provider": "openrouter",
+        "model": "openrouter/free",
+        "api_key": "dummy-openrouter-key",
+    })
+    gateway = ProviderGateway(settings)
+
+    def fake_request(_method: str, _path: str, _payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {"data": [{"id": "some/paid-model"}]}
+
+    monkeypatch.setattr(gateway, "_request", fake_request)
+    result = await gateway.test_connection()
+    assert result["available"] is True
+    assert "openrouter/free" in result["models"]
+
+
 def test_openrouter_uses_openai_compatible_endpoint_and_headers() -> None:
     settings = ProviderSettings.from_payload({
         "provider": "openrouter",
