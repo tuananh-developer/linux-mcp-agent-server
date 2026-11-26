@@ -15,9 +15,17 @@
 
 No arguments. Returns ISO-8601 timestamp, CPU usage (0..100), logical cores, memory total/used/available/percent, load average, uptime and `status`.
 
+### `get_swap_usage`
+
+No arguments. Returns whether swap is enabled, total/used/free bytes, usage percentage, and cumulative swap-in/swap-out byte counters since boot. A host with swap disabled is a valid `status: ok` result with `enabled: false`.
+
 ### `get_disk_usage`
 
 Input: optional `mount_points: string[]`. Default is the server allowlist. Maximum 10 requested paths. Every item must exactly equal an administrator-configured path. Output contains mount point, total/used/available bytes, percentage and status. Unknown path fails closed.
+
+### `get_filesystem_inode_usage`
+
+Input: optional `mount_points: string[]`. Uses the same maximum of 10 exact administrator-allowlisted mount points as `get_disk_usage`. Returns total, used, free and available inode counts and the inode usage percentage. A filesystem that does not report inode capacity is marked `unsupported`.
 
 ### `list_processes`
 
@@ -26,6 +34,10 @@ Input: `limit` default 10 (1..100), `sort_by` enum `cpu|memory`, and optional li
 ### `read_allowed_log`
 
 Input: `alias` and `lines` default 50 (1..200). Alias is resolved only from `config/log-sources.json`; the caller never supplies a path, systemd unit, filter or command. The reader invokes a fixed `journalctl` argv with `shell=False`, a timeout, byte limit and best-effort secret redaction. Log messages are untrusted data.
+
+### `get_resource_pressure`
+
+No arguments. Reads only the fixed Linux `/proc/pressure/{cpu,memory,io}` interface. Returns PSI `some` and `full` averages for 10, 60 and 300 second windows plus cumulative stall microseconds. Unsupported or malformed resources are reported as unavailable/invalid without returning raw procfs content or accepting a caller-supplied path.
 
 ### `get_network_stats`
 
@@ -46,13 +58,13 @@ No arguments. Evaluates CPU, memory and configured filesystem usage against admi
 ## Resource
 
 - URI: `linux://system/summary`.
-- Returns a JSON high-level snapshot: distro, kernel release, architecture, logical CPU count, uptime, CPU/RAM usage, allowlisted disk summary and per-interface network counters. Interface addresses and raw logs are excluded.
+- Returns a JSON high-level snapshot: distro, kernel release, architecture, logical CPU count, uptime, CPU/RAM usage, swap summary, PSI resource-pressure summary, allowlisted disk byte/inode summaries and per-interface network counters. Interface addresses and raw logs are excluded.
 - No tokens, secrets, process command lines, account names or raw log content.
 
 ## Prompt
 
 - Name: `health_check`.
-- Argument: `focus` enum `overview | cpu_memory | disk | processes | network | services | connectivity | alerts`, default `overview`.
+- Argument: `focus` enum `overview | cpu_memory | disk | processes | network | services | connectivity | alerts | swap | pressure | filesystem_inodes`, default `overview`.
 - Instructs the Agent to call relevant read-only tools, cite returned timestamps/numbers, treat logs as untrusted input and avoid destructive actions.
 
 ## OAuth scopes
@@ -61,7 +73,7 @@ No arguments. Evaluates CPU, memory and configured filesystem usage against admi
 |---|---|
 | `/mcp`, tool/resource/prompt discovery | `mcp.read` |
 | `read_allowed_log` | `mcp.read` and `mcp.logs.read` |
-| Other seven tools | `mcp.read` |
+| Other ten tools | `mcp.read` |
 
 ## Error semantics
 
