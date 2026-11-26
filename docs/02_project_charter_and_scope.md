@@ -9,7 +9,8 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 - Official MCP Python SDK v2, Streamable HTTP endpoint at `/mcp`.
 - Linux CPU/RAM, allowlisted filesystem usage, bounded process list and allowlisted systemd journal access.
 - Per-interface network counters, administrator-allowlisted systemd service status, one-port loopback TCP checks and configurable CPU/memory/disk alerts.
-- Eight MCP Tools, one MCP Resource and one MCP Prompt.
+- Swap activity, Linux PSI CPU/memory/I/O stall pressure and inode capacity for allowlisted filesystems.
+- Eleven MCP Tools, one MCP Resource and one MCP Prompt.
 - OAuth2/OIDC resource-server validation using Keycloak, exact issuer and resource/audience binding, and least-privilege scopes.
 - Caddy HTTPS reverse proxy, PostgreSQL for Keycloak only, Docker Compose for infrastructure, and native systemd service for the MCP process.
 - Unit, protocol-contract, integration, security and performance test plans.
@@ -26,6 +27,9 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 
 | ID | Requirement | Verification |
 |---|---|---|
+| FR-014 | The server shall expose swap capacity and cumulative swap-in/swap-out counters. | Swap telemetry unit tests |
+| FR-015 | The server shall expose Linux PSI CPU, memory and I/O stall averages with graceful unsupported-kernel handling. | PSI parser and unsupported-resource tests |
+| FR-016 | The server shall expose inode capacity only for exact administrator-allowlisted filesystem mount points. | Inode allowlist and capacity tests |
 | FR-001 | The server shall expose MCP over Streamable HTTP at `/mcp`. | MCP client initialize and discovery test |
 | FR-002 | The server shall expose CPU, memory, load average and uptime through `get_system_metrics`. | Unit test and live host check |
 | FR-003 | The server shall return disk usage only for administrator-allowlisted absolute paths. | Allowlist positive/negative tests |
