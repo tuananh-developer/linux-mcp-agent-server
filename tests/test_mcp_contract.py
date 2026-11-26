@@ -103,6 +103,7 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert "operatingSystem" in summary_payload
         assert "cpuUsagePercent" in summary_payload
         assert "network" in summary_payload
+        assert "filesystemInodes" in summary_payload
         assert "swap" in summary_payload
         assert "resourcePressure" in summary_payload
 
