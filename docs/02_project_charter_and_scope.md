@@ -9,7 +9,8 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 - Official MCP Python SDK v2, Streamable HTTP endpoint at `/mcp`.
 - Linux CPU/RAM, allowlisted filesystem usage, bounded process list and allowlisted systemd journal access.
 - Per-interface network counters, administrator-allowlisted systemd service status, one-port loopback TCP checks and configurable CPU/memory/disk alerts.
-- Eight MCP Tools, one MCP Resource and one MCP Prompt.
+- Swap activity, Linux PSI CPU/memory/I/O stall pressure and inode capacity for allowlisted filesystems.
+- Eleven MCP Tools, one MCP Resource and one MCP Prompt.
 - OAuth2/OIDC resource-server validation using Keycloak, exact issuer and resource/audience binding, and least-privilege scopes.
 - Caddy HTTPS reverse proxy, PostgreSQL for Keycloak only, Docker Compose for infrastructure, and native systemd service for the MCP process.
 - Unit, protocol-contract, integration, security and performance test plans.
@@ -39,6 +40,9 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 | FR-011 | The server shall inspect only administrator-allowlisted systemd service units using fixed, read-only `systemctl show` arguments. | Allowlist and subprocess-boundary tests |
 | FR-012 | The server shall check one TCP port on loopback only; callers cannot supply remote hosts or port ranges. | Loopback and input-validation tests |
 | FR-013 | The server shall evaluate CPU, memory and allowlisted-disk usage against validated administrator-configured thresholds. | Threshold and alert unit tests |
+| FR-017 | The server shall expose swap capacity and cumulative swap-in/swap-out counters. | Swap telemetry unit tests |
+| FR-018 | The server shall expose Linux PSI CPU, memory and I/O stall averages with graceful unsupported-kernel handling. | PSI parser and unsupported-resource tests |
+| FR-019 | The server shall expose inode capacity only for exact administrator-allowlisted filesystem mount points. | Inode allowlist and capacity tests |
 
 ## Non-functional requirements
 
@@ -65,7 +69,7 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 ## Acceptance gates
 
 1. Unit tests and quality tools pass on every supported Python matrix entry.
-2. A standards-compliant MCP Client initializes the server and discovers all eight tools, the resource and the prompt over Streamable HTTP.
+2. A standards-compliant MCP Client initializes the server and discovers all eleven tools, the resource and the prompt over Streamable HTTP.
 3. Positive and negative OAuth integration tests prove issuer, expiry, audience/resource, base scope and log-specific scope enforcement.
 4. A second LAN device connects over trusted HTTPS; Caddy and Keycloak administration routes remain restricted.
 5. systemd runs as a dedicated non-root user; journal group access and its residual privilege are explicitly reviewed.

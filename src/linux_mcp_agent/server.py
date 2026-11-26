@@ -32,8 +32,11 @@ from linux_mcp_agent.diagnostics import (
     get_system_alerts,
 )
 from linux_mcp_agent.log_reader import load_log_sources, read_allowed_log
+from linux_mcp_agent.resource_metrics import get_resource_pressure
 from linux_mcp_agent.system import (
     get_disk_usage,
+    get_filesystem_inode_usage,
+    get_swap_usage,
     get_system_metrics,
     list_processes,
     system_summary,
@@ -67,10 +70,24 @@ def build_mcp_server(settings: Settings) -> MCPServer:
         """Return a timestamped CPU, memory, load-average and uptime snapshot."""
         return await asyncio.to_thread(get_system_metrics)
 
+    @mcp.tool(name="get_swap_usage")
+    async def get_swap_usage_tool() -> dict[str, object]:
+        """Return swap capacity and cumulative swap-in/swap-out counters."""
+        return await asyncio.to_thread(get_swap_usage)
+
     @mcp.tool(name="get_disk_usage")
     async def get_disk_usage_tool(mount_points: list[str] | None = None) -> dict[str, object]:
         """Read usage for configured mount points only; unknown paths are rejected."""
         return await asyncio.to_thread(get_disk_usage, mount_points, settings.allowed_disk_paths)
+
+    @mcp.tool(name="get_filesystem_inode_usage")
+    async def get_filesystem_inode_usage_tool(
+        mount_points: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Read inode capacity for administrator-allowlisted mount points only."""
+        return await asyncio.to_thread(
+            get_filesystem_inode_usage, mount_points, settings.allowed_disk_paths
+        )
 
     @mcp.tool(name="list_processes")
     async def list_processes_tool(
@@ -105,6 +122,11 @@ def build_mcp_server(settings: Settings) -> MCPServer:
         """Return interface traffic counters and link state; no IP addresses are exposed."""
         return await asyncio.to_thread(get_network_stats, interface)
 
+    @mcp.tool(name="get_resource_pressure")
+    async def get_resource_pressure_tool() -> dict[str, object]:
+        """Return Linux PSI CPU, memory and I/O stall averages when the kernel supports them."""
+        return await asyncio.to_thread(get_resource_pressure)
+
     @mcp.tool(name="get_service_status")
     async def get_service_status_tool(unit: str) -> dict[str, object]:
         """Read status for an administrator-allowlisted systemd .service unit only."""
@@ -136,6 +158,11 @@ def build_mcp_server(settings: Settings) -> MCPServer:
         """Return a high-level JSON summary of the Linux host; no secrets or raw logs."""
         summary = await asyncio.to_thread(system_summary, settings.allowed_disk_paths)
         summary["network"] = await asyncio.to_thread(get_network_stats)
+        summary["filesystemInodes"] = await asyncio.to_thread(
+            get_filesystem_inode_usage, list(settings.allowed_disk_paths[:5]), settings.allowed_disk_paths
+        )
+        summary["swap"] = await asyncio.to_thread(get_swap_usage)
+        summary["resourcePressure"] = await asyncio.to_thread(get_resource_pressure)
         return json.dumps(summary, ensure_ascii=False)
 
     @mcp.prompt()
@@ -149,18 +176,24 @@ def build_mcp_server(settings: Settings) -> MCPServer:
             "services",
             "connectivity",
             "alerts",
+            "swap",
+            "pressure",
+            "filesystem_inodes",
         ] = "overview",
     ) -> str:
         """Guide an agent through a read-only Linux health check."""
         guidance = {
-            "overview": "Call get_system_metrics, get_disk_usage, list_processes, get_network_stats, and get_system_alerts for a concise host overview. Inspect a service only when its exact unit is administrator-allowlisted.",
-            "cpu_memory": "Call get_system_metrics and get_system_alerts; explain CPU and memory with timestamps and the thresholds returned by the server.",
-            "disk": "Call get_disk_usage and get_system_alerts; compare filesystem usage only with the configured threshold returned by the server.",
+            "overview": "Call get_system_metrics, get_swap_usage, get_resource_pressure, get_disk_usage, get_filesystem_inode_usage, list_processes, get_network_stats, and get_system_alerts for a concise host overview. Inspect a service only when its exact unit is administrator-allowlisted.",
+            "cpu_memory": "Call get_system_metrics, get_swap_usage, get_resource_pressure, and get_system_alerts; distinguish memory utilization, swap activity and PSI stall pressure.",
+            "disk": "Call get_disk_usage, get_filesystem_inode_usage, and get_system_alerts; distinguish byte capacity from inode exhaustion.",
             "processes": "Call list_processes sorted by CPU and identify high CPU/RSS processes without suggesting destructive actions.",
             "network": "Call get_network_stats and explain per-interface traffic counters and link state; do not infer bandwidth rates from cumulative counters.",
             "services": "Call get_service_status only for exact service units explicitly allowlisted by the administrator and explain active/load state without restarting anything.",
             "connectivity": "Call check_port for one local TCP port only; it checks 127.0.0.1 and does not test remote hosts or scan port ranges.",
             "alerts": "Call get_system_alerts and explain each threshold warning using its current value and configured threshold.",
+            "swap": "Call get_swap_usage; explain whether swap is enabled, its current usage, and cumulative swap-in/swap-out counters.",
+            "pressure": "Call get_resource_pressure; explain PSI some/full stall averages over 10, 60 and 300 seconds. Report unavailable resources as unsupported, not as zero pressure.",
+            "filesystem_inodes": "Call get_filesystem_inode_usage and get_disk_usage; explain inode exhaustion separately from byte capacity.",
         }
         return (
             "You are a Linux observability assistant. Use only the read-only MCP tools. "

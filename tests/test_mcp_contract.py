@@ -26,10 +26,13 @@ async def test_server_registers_the_required_mcp_interface(
 
     assert {tool.name for tool in tools} == {
         "get_system_metrics",
+        "get_swap_usage",
         "get_disk_usage",
+        "get_filesystem_inode_usage",
         "list_processes",
         "read_allowed_log",
         "get_network_stats",
+        "get_resource_pressure",
         "get_service_status",
         "check_port",
         "get_system_alerts",
@@ -58,10 +61,13 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
 
         assert {tool.name for tool in tools.tools} == {
             "get_system_metrics",
+            "get_swap_usage",
             "get_disk_usage",
+            "get_filesystem_inode_usage",
             "list_processes",
             "read_allowed_log",
             "get_network_stats",
+            "get_resource_pressure",
             "get_service_status",
             "check_port",
             "get_system_alerts",
@@ -76,6 +82,9 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert metrics.content
 
         tool_calls: list[tuple[str, dict[str, Any]]] = [
+            ("get_swap_usage", {}),
+            ("get_filesystem_inode_usage", {}),
+            ("get_resource_pressure", {}),
             ("get_network_stats", {}),
             ("get_service_status", {"unit": "ssh.service"}),
             ("check_port", {"port": 1}),
@@ -94,6 +103,9 @@ async def test_official_mcp_client_discovers_and_invokes_server_capabilities(
         assert "operatingSystem" in summary_payload
         assert "cpuUsagePercent" in summary_payload
         assert "network" in summary_payload
+        assert "filesystemInodes" in summary_payload
+        assert "swap" in summary_payload
+        assert "resourcePressure" in summary_payload
 
         prompt = await client.get_prompt("health_check", {"focus": "overview"})
         assert len(prompt.messages) == 1

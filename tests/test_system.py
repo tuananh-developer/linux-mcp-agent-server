@@ -10,6 +10,8 @@ import linux_mcp_agent.system as system
 from linux_mcp_agent.system import (
     NotAllowedError,
     get_disk_usage,
+    get_filesystem_inode_usage,
+    get_swap_usage,
     get_system_metrics,
     list_processes,
 )
@@ -39,6 +41,42 @@ def test_disk_usage_returns_only_allowlisted_paths(tmp_path: Path) -> None:
     assert item["usedBytes"] >= 0
     assert item["availableBytes"] >= 0
     assert 0 <= item["usagePercent"] <= 100
+
+
+def test_filesystem_inode_usage_is_allowlisted_and_reports_capacity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_statvfs(_path: str) -> SimpleNamespace:
+        return SimpleNamespace(f_files=100, f_ffree=25, f_favail=20)
+
+    monkeypatch.setattr(system.os, "statvfs", fake_statvfs)
+
+    result = get_filesystem_inode_usage([str(tmp_path)], (str(tmp_path),))
+    item = result["filesystems"][0]
+
+    assert item["totalInodes"] == 100
+    assert item["usedInodes"] == 75
+    assert item["freeInodes"] == 25
+    assert item["availableInodes"] == 20
+    assert item["usagePercent"] == 75.0
+
+
+def test_filesystem_inode_usage_rejects_unknown_mount_point(tmp_path: Path) -> None:
+    with pytest.raises(NotAllowedError):
+        get_filesystem_inode_usage(["/etc"], (str(tmp_path),))
+
+
+def test_swap_usage_reports_non_negative_counters() -> None:
+    result = get_swap_usage()
+    assert result["status"] == "ok"
+    assert result["totalBytes"] >= 0
+    assert result["usedBytes"] >= 0
+    assert result["freeBytes"] >= 0
+    assert result["swapInBytes"] >= 0
+    assert result["swapOutBytes"] >= 0
+    assert 0 <= result["usagePercent"] <= 100
+    assert result["enabled"] is (result["totalBytes"] > 0)
 
 
 def test_list_processes_limits_and_omits_sensitive_fields() -> None:

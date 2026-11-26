@@ -5,11 +5,11 @@ The browser dashboard is served at / and /dashboard; the optional AI assistant i
 ## Data flow
 
 - The browser creates a same-origin MCP Streamable HTTP client for /mcp.
-- It discovers the MCP tool registry and requires all eight read-only tools before marking the dashboard connected.
-- The overview periodically invokes get_system_metrics, get_disk_usage, list_processes, get_network_stats, get_system_alerts, get_service_status, and check_port.
+- It discovers the MCP tool registry and requires all eleven read-only tools before marking the dashboard connected.
+- The overview periodically invokes get_system_metrics, get_swap_usage, get_disk_usage, get_filesystem_inode_usage, get_resource_pressure, list_processes, get_network_stats, get_system_alerts, get_service_status, and check_port.
 - Network panels calculate current RX/TX throughput from consecutive cumulative counter samples while retaining total bytes received/sent; the first sample establishes the baseline.
 - Overall connection state distinguishes healthy, degraded, expired-auth and offline states. Expired or insufficient Keycloak tokens trigger reconnection instead of leaving a stale connected indicator.
-- The process table can be sorted by CPU or RAM and filtered by process name. The service, single-port, and log panels remain explicit, read-only checks.
+- The overview shows swap usage, PSI CPU/memory/I/O stall averages and inode usage alongside byte capacity. The process table can be sorted by CPU or RAM and filtered by process name. The service, single-port, and log panels remain explicit, read-only checks.
 - HTTP 502/503/504 responses identify the Caddy-to-MCP upstream problem instead of showing a generic connection failure. Partial failures remain visible per dashboard panel.
 - Recent journal access is separate and is only attempted after the user presses the log button. It still requires the server journal alias allowlist and the mcp.logs.read scope.
 - The AI assistant supports Google Gemini, OpenAI, OpenRouter, Anthropic Claude, and Ollama. OpenRouter uses the OpenAI-compatible API adapter; select a free model ID (for example `nvidia/nemotron-3-ultra-550b-a55b:free`) and provide an OpenRouter API key. Free model availability and limits are controlled by OpenRouter and upstream providers.

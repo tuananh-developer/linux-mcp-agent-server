@@ -4,7 +4,7 @@ A read-only Linux observability MCP server for external Agentic AI clients. Buil
 
 ## Browser dashboard
 
-Open `/` or `/dashboard` for live CPU, RAM, disk, network, process, service, port and alert views. The optional AI assistant is available at `/assistant`. Dashboard telemetry is requested through authenticated MCP tools; it does not require an LLM, database, or external API key. See [docs/12_dashboard.md](docs/12_dashboard.md) for data flow and security details.
+Open `/` or `/dashboard` for live CPU, RAM, swap, disk/inode, PSI pressure, network, process, service, port and alert views. The optional AI assistant is available at `/assistant`. Dashboard telemetry is requested through authenticated MCP tools; it does not require an LLM, database, or external API key. See [docs/12_dashboard.md](docs/12_dashboard.md) for data flow and security details.
 
 ## Fresh installation (Ubuntu 24.04 LTS)
 
@@ -42,10 +42,13 @@ The server exposes:
 | Primitive | Name | Purpose |
 |---|---|---|
 | Tool | `get_system_metrics` | CPU, memory, load average and uptime |
-| Tool | `get_disk_usage` | Allowlisted filesystem capacity |
+| Tool | `get_swap_usage` | Swap capacity and cumulative swap-in/swap-out counters |
+| Tool | `get_disk_usage` | Allowlisted filesystem byte capacity |
+| Tool | `get_filesystem_inode_usage` | Inode usage for allowlisted mount points |
 | Tool | `list_processes` | Bounded PID/name/CPU/RAM snapshot |
 | Tool | `read_allowed_log` | Allowlisted journald unit aliases only |
 | Tool | `get_network_stats` | Per-interface traffic counters and link state |
+| Tool | `get_resource_pressure` | Linux PSI CPU, memory and I/O stall averages |
 | Tool | `get_service_status` | Read-only status of allowlisted systemd services |
 | Tool | `check_port` | Single local TCP listener check on loopback |
 | Tool | `get_system_alerts` | CPU, memory and allowlisted-disk threshold alerts |
@@ -146,5 +149,5 @@ In a second terminal, run the real Keycloak-authenticated MCP acceptance client:
 uv run python scripts/demo_live.py
 ```
 
-It discovers and calls all eight tools, reads `linux://system/summary`, and retrieves the `health_check` prompt. See [docs/10_live_demo.md](docs/10_live_demo.md) for one-time credential setup and TLS trust notes. The client keeps the access token in memory and never prints or saves credentials.
+It discovers and calls all eleven tools, reads `linux://system/summary`, and retrieves the `health_check` prompt. See [docs/10_live_demo.md](docs/10_live_demo.md) for one-time credential setup and TLS trust notes. The client keeps the access token in memory and never prints or saves credentials.
 

@@ -173,6 +173,63 @@ def list_processes(
     }
 
 
+def get_swap_usage() -> dict[str, Any]:
+    """Return swap capacity and cumulative swap-in/swap-out counters."""
+    swap = psutil.swap_memory()
+    return {
+        "timestamp": _timestamp(),
+        "enabled": bool(swap.total),
+        "totalBytes": int(swap.total),
+        "usedBytes": int(swap.used),
+        "freeBytes": int(swap.free),
+        "usagePercent": round(float(swap.percent), 2),
+        "swapInBytes": int(swap.sin),
+        "swapOutBytes": int(swap.sout),
+        "status": "ok",
+    }
+
+
+def get_filesystem_inode_usage(
+    mount_points: list[str] | None,
+    allowed_paths: tuple[str, ...],
+) -> dict[str, Any]:
+    """Read inode capacity for administrator-allowlisted mount points only."""
+    requested = mount_points if mount_points is not None else list(allowed_paths)
+    if not requested:
+        raise ValueError("At least one configured mount point is required")
+    if len(requested) > 10:
+        raise ValueError("A maximum of 10 mount points can be requested")
+
+    filesystems: list[dict[str, Any]] = []
+    for path in requested:
+        if path not in allowed_paths:
+            raise NotAllowedError(f"Mount point is not allowlisted: {path}")
+        if not Path(path).is_dir():
+            raise FileNotFoundError(f"Configured mount point does not exist: {path}")
+
+        stats = os.statvfs(path)
+        total_inodes = int(stats.f_files)
+        free_inodes = int(stats.f_ffree)
+        available_inodes = int(stats.f_favail)
+        used_inodes = max(0, total_inodes - free_inodes)
+        usage_percent = (
+            min(100.0, used_inodes / total_inodes * 100.0)
+            if total_inodes
+            else 0.0
+        )
+        filesystems.append({
+            "mountPoint": path,
+            "totalInodes": total_inodes,
+            "usedInodes": used_inodes,
+            "freeInodes": free_inodes,
+            "availableInodes": available_inodes,
+            "usagePercent": round(usage_percent, 2),
+            "status": "ok" if total_inodes else "unsupported",
+        })
+
+    return {"timestamp": _timestamp(), "filesystems": filesystems, "status": "ok"}
+
+
 def system_summary(allowed_paths: tuple[str, ...]) -> dict[str, Any]:
     try:
         os_info = platform.freedesktop_os_release()

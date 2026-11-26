@@ -54,10 +54,13 @@ async def test_official_client_uses_real_streamable_http_transport(
                 tools = await client.list_tools()
                 assert {tool.name for tool in tools.tools} == {
                     "get_system_metrics",
+                    "get_swap_usage",
                     "get_disk_usage",
+                    "get_filesystem_inode_usage",
                     "list_processes",
                     "read_allowed_log",
                     "get_network_stats",
+                    "get_resource_pressure",
                     "get_service_status",
                     "check_port",
                     "get_system_alerts",
