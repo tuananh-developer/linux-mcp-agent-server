@@ -10,6 +10,7 @@ flowchart TB
   C -->|OIDC discovery / token / JWKS| K[Keycloak :8080]
   M -->|RFC 7662 introspection| K
   M --> P[/proc and psutil/]
+  M --> Q[/proc/pressure PSI/]
   M --> J[journald via fixed journalctl argv]
   M --> F[Allowlisted filesystem mount points]
   M --> N[psutil network interface counters]
@@ -25,14 +26,15 @@ flowchart TB
 - Caddy: TLS, host routing and strict route allowlist. Only port 443 is exposed to the LAN.
 - Keycloak: authorization server; creates and signs tokens. The MCP service never issues tokens.
 - MCP application: verifies each bearer token through Keycloak introspection, confirms exact issuer/expiry/audience/resource/scope, and invokes read-only Linux functions.
-- Linux: source of CPU/RAM, filesystem, process, journal, network-interface and systemd service data. Port checks are loopback-only.
+- Linux: source of CPU/RAM/swap, PSI CPU/memory/I/O pressure, filesystem byte and inode capacity, process, journal, network-interface and systemd service data. Port checks are loopback-only.
 - PostgreSQL: Keycloak persistence only.
 
 ## Python application layers
 
 - `config.py`: typed environment configuration, loopback-only backend guard.
 - `auth.py` + `auth_claims.py`: RFC 7662 introspection adapter and fail-closed claim validation.
-- `system.py`: psutil-based system/disk/process metrics.
+- `system.py`: psutil-based CPU/RAM/swap, filesystem byte/inode and process metrics.
+- `resource_metrics.py`: bounded, read-only Linux PSI parsing for CPU, memory and I/O stalls.
 - `diagnostics.py`: network counters, allowlisted systemd service inspection, loopback TCP checks and threshold-based alerts.
 - `log_reader.py`: alias allowlist and bounded `journalctl` execution.
 - `server.py`: MCP Tools, Resource, Prompt and ASGI composition.
