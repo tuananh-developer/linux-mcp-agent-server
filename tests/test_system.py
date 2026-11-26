@@ -47,11 +47,10 @@ def test_filesystem_inode_usage_is_allowlisted_and_reports_capacity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        system.os,
-        "statvfs",
-        lambda _path: SimpleNamespace(f_files=100, f_ffree=25, f_favail=20),
-    )
+    def fake_statvfs(_path: str) -> SimpleNamespace:
+        return SimpleNamespace(f_files=100, f_ffree=25, f_favail=20)
+
+    monkeypatch.setattr(system.os, "statvfs", fake_statvfs)
 
     result = get_filesystem_inode_usage([str(tmp_path)], (str(tmp_path),))
     item = result["filesystems"][0]
