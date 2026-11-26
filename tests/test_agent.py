@@ -52,7 +52,7 @@ async def test_model_gateway_uses_server_tool_schemas_and_filters_logs(monkeypat
         response = await client.post("/agent/chat", headers=headers, json=body)
         assert response.status_code == 200, response.text
         assert response.json()["message"]["tool_calls"][0]["function"]["name"] == "get_system_metrics"
-        assert {t["function"]["name"] for t in captured[0]["tools"]} == {"get_system_metrics", "get_disk_usage", "list_processes", "get_network_stats", "get_service_status", "check_port", "get_system_alerts"}
+        assert {t["function"]["name"] for t in captured[0]["tools"]} == {"get_system_metrics", "get_swap_usage", "get_disk_usage", "get_filesystem_inode_usage", "list_processes", "get_network_stats", "get_resource_pressure", "get_service_status", "check_port", "get_system_alerts"}
         assert captured[0]["messages"][0]["role"] == "system"
         assert captured[0]["stream"] is False
         assert captured[0]["options"]["num_ctx"] == 4096
