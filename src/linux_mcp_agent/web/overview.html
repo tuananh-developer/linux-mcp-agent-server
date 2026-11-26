@@ -40,6 +40,10 @@
 <path class="gridline" d="M42 20H704 M42 58H704 M42 96H704 M42 134H704 M42 172H704"/>
 <text x="8" y="24">100</text><text x="17" y="62">75</text><text x="17" y="100">50</text><text x="17" y="138">25</text><text x="24" y="176">0</text><path id="cpu-line" class="chart-line cpu-line"/><path id="ram-line" class="chart-line ram-line"/></svg></div></section>
 <div class="two-col">
+<section class="panel"><div class="panel-heading"><div><h2>Swap usage</h2><p>Swap capacity và dữ liệu swap-in/swap-out tích lũy</p></div></div><div id="swap-summary" class="result-box">Đang chờ dữ liệu swap…</div></section>
+<section class="panel"><div class="panel-heading"><div><h2>Resource pressure (PSI)</h2><p>Thời gian CPU, RAM và I/O bị stall trong các cửa sổ 10/60/300 giây</p></div></div><div id="pressure-list" class="network-grid"><p class="empty">Đang chờ dữ liệu PSI…</p></div></section>
+</div>
+<div class="two-col">
 <section class="panel"><div class="panel-heading"><div><h2>Disk usage</h2><p>Các mount point được server cho phép</p></div><svg><use href="#i-disk"/></svg></div><div id="disk-list" class="stack-list"><p class="empty">Đang chờ dữ liệu ổ đĩa…</p></div></section>
 <section class="panel"><div class="panel-heading"><div><h2>System alerts</h2><p>Đánh giá theo ngưỡng cấu hình trên server</p></div><svg><use href="#i-alert"/></svg></div><div id="alert-summary" class="alert-summary">Đang chờ kiểm tra…</div><div id="alert-list" class="stack-list"><p class="empty">Chưa có dữ liệu cảnh báo.</p></div></section>
 </div>
