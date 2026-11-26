@@ -141,7 +141,8 @@ The project shall not be marked accepted until all acceptance evidence is record
 The implementation mapping is:
 
 - FR-001, FR-008, FR-009, FR-010: `src/linux_mcp_agent/server.py`.
-- FR-002, FR-003, FR-004, FR-005: `src/linux_mcp_agent/system.py`.
+- FR-002, FR-003, FR-004, FR-005, FR-017, FR-019: `src/linux_mcp_agent/system.py`.
+- FR-018: `src/linux_mcp_agent/resource_metrics.py`.
 - FR-006, FR-007: `src/linux_mcp_agent/log_reader.py`.
 - FR-011: `src/linux_mcp_agent/auth.py`, `src/linux_mcp_agent/auth_claims.py` and the log-scope check in `server.py`.
 - Runtime constraints: `src/linux_mcp_agent/config.py`.
