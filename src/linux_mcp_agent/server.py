@@ -158,6 +158,9 @@ def build_mcp_server(settings: Settings) -> MCPServer:
         """Return a high-level JSON summary of the Linux host; no secrets or raw logs."""
         summary = await asyncio.to_thread(system_summary, settings.allowed_disk_paths)
         summary["network"] = await asyncio.to_thread(get_network_stats)
+        summary["filesystemInodes"] = await asyncio.to_thread(
+            get_filesystem_inode_usage, None, settings.allowed_disk_paths
+        )
         summary["swap"] = await asyncio.to_thread(get_swap_usage)
         summary["resourcePressure"] = await asyncio.to_thread(get_resource_pressure)
         return json.dumps(summary, ensure_ascii=False)
