@@ -40,9 +40,9 @@ Build and configure a secure, read-only Linux MCP server that exposes system obs
 | FR-011 | The server shall inspect only administrator-allowlisted systemd service units using fixed, read-only `systemctl show` arguments. | Allowlist and subprocess-boundary tests |
 | FR-012 | The server shall check one TCP port on loopback only; callers cannot supply remote hosts or port ranges. | Loopback and input-validation tests |
 | FR-013 | The server shall evaluate CPU, memory and allowlisted-disk usage against validated administrator-configured thresholds. | Threshold and alert unit tests |
-| FR-014 | The server shall expose swap capacity and cumulative swap-in/swap-out counters. | Swap telemetry unit tests |
-| FR-015 | The server shall expose Linux PSI CPU, memory and I/O stall averages with graceful unsupported-kernel handling. | PSI parser and unsupported-resource tests |
-| FR-016 | The server shall expose inode capacity only for exact administrator-allowlisted filesystem mount points. | Inode allowlist and capacity tests |
+| FR-017 | The server shall expose swap capacity and cumulative swap-in/swap-out counters. | Swap telemetry unit tests |
+| FR-018 | The server shall expose Linux PSI CPU, memory and I/O stall averages with graceful unsupported-kernel handling. | PSI parser and unsupported-resource tests |
+| FR-019 | The server shall expose inode capacity only for exact administrator-allowlisted filesystem mount points. | Inode allowlist and capacity tests |
 
 ## Non-functional requirements
 
