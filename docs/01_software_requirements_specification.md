@@ -82,12 +82,15 @@ The system consists of an external Agent/MCP Client, a TLS reverse proxy, the MC
 | FR-014 | The server shall provide `get_service_status` for exact administrator-allowlisted `.service` units only, using fixed `systemctl show` arguments and a timeout. |
 | FR-015 | The server shall provide `check_port` for one local TCP port on `127.0.0.1`; it shall not accept remote hosts, UDP or port ranges. |
 | FR-016 | The server shall provide `get_system_alerts`, evaluating CPU, memory and allowlisted filesystem utilization against validated administrator-configured warning thresholds. |
+| FR-017 | The server shall provide `get_swap_usage`, returning swap capacity and cumulative swap-in/swap-out counters without requiring a shell command. |
+| FR-018 | The server shall provide `get_resource_pressure`, reading only fixed Linux PSI CPU, memory and I/O interfaces with bounded parsing and graceful unsupported-kernel handling. |
+| FR-019 | The server shall provide `get_filesystem_inode_usage` only for exact administrator-allowlisted mount points. |
 
 ## 4. External interface requirements
 
 ### 4.1 MCP interface
 
-The server shall expose eight tools: `get_system_metrics`, `get_disk_usage`, `list_processes`, `read_allowed_log`, `get_network_stats`, `get_service_status`, `check_port` and `get_system_alerts`; one resource: `linux://system/summary`; and one prompt: `health_check`.
+The server shall expose eleven tools: `get_system_metrics`, `get_swap_usage`, `get_disk_usage`, `get_filesystem_inode_usage`, `list_processes`, `read_allowed_log`, `get_network_stats`, `get_resource_pressure`, `get_service_status`, `check_port` and `get_system_alerts`; one resource: `linux://system/summary`; and one prompt: `health_check`.
 
 ### 4.2 Authentication interface
 
@@ -95,7 +98,7 @@ In production mode, the MCP resource server shall introspect bearer access token
 
 ### 4.3 Host interface
 
-The application shall read host metrics through supported Linux interfaces and psutil. Journal access shall use only administrator-configured aliases. The application shall not expose arbitrary host commands or mutation operations.
+The application shall read CPU, RAM, swap, PSI stall and filesystem inode metrics through supported Linux interfaces and psutil. Journal access shall use only administrator-configured aliases. The application shall not expose arbitrary host commands or mutation operations.
 
 ## 5. Non-functional requirements
 
