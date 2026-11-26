@@ -159,7 +159,7 @@ def build_mcp_server(settings: Settings) -> MCPServer:
         summary = await asyncio.to_thread(system_summary, settings.allowed_disk_paths)
         summary["network"] = await asyncio.to_thread(get_network_stats)
         summary["filesystemInodes"] = await asyncio.to_thread(
-            get_filesystem_inode_usage, None, settings.allowed_disk_paths
+            get_filesystem_inode_usage, list(settings.allowed_disk_paths[:5]), settings.allowed_disk_paths
         )
         summary["swap"] = await asyncio.to_thread(get_swap_usage)
         summary["resourcePressure"] = await asyncio.to_thread(get_resource_pressure)
