@@ -41,6 +41,8 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assert "Linux Observatory" in page.text
         assert "Tổng quan hệ thống" in page.text
         assert 'id="cpu-value"' in page.text
+        assert 'id="swap-summary"' in page.text
+        assert 'id="pressure-list"' in page.text
         assert "Tự động cập nhật mỗi 5 giây" in page.text
         assert 'id="login-keycloak"' in page.text
         assert 'id="bearer-token"' not in page.text
@@ -48,6 +50,9 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         assert overview_script.status_code == 200
         assert "REFRESH_INTERVAL_MS=5000" in overview_script.text
         assert "HISTORY_LIMIT=60" in overview_script.text
+        assert "get_swap_usage" in overview_script.text
+        assert "get_resource_pressure" in overview_script.text
+        assert "get_filesystem_inode_usage" in overview_script.text
         assistant = await client.get("/assistant")
         assert assistant.status_code == 200
         assert 'id="chat-form"' in assistant.text
@@ -91,7 +96,7 @@ async def test_dashboard_browser_session_calls_real_mcp(monkeypatch: pytest.Monk
         tools = rpc_result(await client.post("/mcp", headers=headers, json={
             "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {},
         }))
-        assert {tool["name"] for tool in tools["tools"]} == {"get_system_metrics", "get_disk_usage", "list_processes", "read_allowed_log", "get_network_stats", "get_service_status", "check_port", "get_system_alerts"}
+        assert {tool["name"] for tool in tools["tools"]} == {"get_system_metrics", "get_swap_usage", "get_disk_usage", "get_filesystem_inode_usage", "list_processes", "read_allowed_log", "get_network_stats", "get_resource_pressure", "get_service_status", "check_port", "get_system_alerts"}
         metrics = rpc_result(await client.post("/mcp", headers=headers, json={
             "jsonrpc": "2.0", "id": 3, "method": "tools/call",
             "params": {"name": "get_system_metrics", "arguments": {}},
